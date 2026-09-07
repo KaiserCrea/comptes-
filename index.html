@@ -599,7 +599,10 @@ function fermerTiroir(){
   tiroirOuvert = false;
   edition = null;
 }
-function fermerEtRevenir(){ fermerTiroir(); try { history.back(); } catch(e){} }
+function fermerEtRevenir(){
+  if(tiroirOuvert){ try { history.back(); return; } catch(e){} }
+  fermerTiroir();
+}
 
 function ouvrirMoisPicker(){
   var p = moisCourant.split('-');
@@ -808,10 +811,11 @@ function ouvrirReglages(){
   if(m){
     h += '<div class="sstitre">'+libMois(moisCourant)+'</div>';
     h += '<div class="reg"><span>Retraite</span><input type="text" inputmode="decimal" id="r-retraite" value="'+m.retraite+'"></div>';
-    if(moisCourant === premierK()){
-      h += '<div class="reg"><span>Solde de départ</span><input type="text" inputmode="decimal" id="r-report" value="'+(Number(m.report)||0)+'"></div>';
+    var etiq = (moisCourant === premierK()) ? 'Solde de départ' : 'Reporté du mois passé';
+    if(!m.clos){
+      h += '<div class="reg"><span>'+etiq+'</span><input type="text" inputmode="decimal" id="r-report" value="'+(Number(m.report)||0)+'"></div>';
     } else {
-      h += '<div class="reg"><span>Reporté du mois passé</span><b class="num">'+eur(Number(m.report)||0,0)+'</b></div>';
+      h += '<div class="reg"><span>'+etiq+'</span><b class="num">'+eur(Number(m.report)||0,0)+'</b></div>';
     }
   }
   h += '<div class="reg"><span>Découvert autorisé</span><input type="text" inputmode="decimal" id="r-plafond" value="'+S.reglages.plafond+'"></div>';
@@ -823,7 +827,7 @@ function ouvrirReglages(){
   }
   h += '<div class="actions"><button id="r-export">Exporter</button><button id="r-import">Importer</button></div>';
   h += '<div class="actions"><button class="plein" id="r-ok">Enregistrer</button></div>';
-  h += '<div class="note2">Le mois comptable se clôture le '+JOURCLOTURE+'. Après cette date, les saisies vont sur le mois suivant. L\'export enregistre une sauvegarde de tous tes mois.</div>';
+  h += '<div class="note2">Le report se corrige tant que le mois n\'est pas clôturé. Le mois comptable se clôture le '+JOURCLOTURE+'. Après cette date, les saisies vont sur le mois suivant. L\'export enregistre une sauvegarde de tous tes mois.</div>';
   ouvrirTiroir(h);
 
   document.getElementById('r-ok').addEventListener('click', function(){
