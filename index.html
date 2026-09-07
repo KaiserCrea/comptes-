@@ -72,6 +72,16 @@ section.on{display:block}
 .vide{text-align:center;color:var(--brun);font-size:13px;padding:34px 20px;line-height:1.8}
 .bouton{display:block;margin:20px auto 0;border:.5px solid var(--or-fonce);background:none;border-radius:20px;padding:9px 22px;font-size:13px;color:var(--sable);cursor:pointer}
 .bouton:active{background:var(--carte2)}
+.flottant{position:fixed;right:18px;bottom:calc(84px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;border:.5px solid var(--or);background:var(--carte2);color:var(--or);display:flex;align-items:center;justify-content:center;z-index:30;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.35)}
+.flottant:active{background:var(--carte)}
+.ravmini{display:flex;align-items:center;gap:9px;padding:10px 15px;background:var(--carte);border-radius:10px;margin:8px 0 14px;cursor:pointer}
+.ravmini span{flex:1;font-size:12px;color:var(--brun);letter-spacing:.4px}
+.pdrag{transition:background .15s}
+.pdrag.attrape{background:var(--carte2);box-shadow:0 4px 14px rgba(0,0,0,.4)}
+.poignee{flex:none;line-height:0;color:var(--or-sombre);padding:2px 0 2px 2px}
+.fleches{display:flex;gap:8px;margin-bottom:14px}
+.fleches button{flex:1;padding:10px;border-radius:8px;border:.5px solid var(--or-sombre);background:none;color:var(--sable);cursor:pointer;line-height:0}
+.histo .rang{cursor:pointer}
 .boutonclos{display:block;width:100%;margin:26px 0 0;border:.5px solid var(--or);background:none;border-radius:22px;padding:12px;font-size:13px;color:var(--or);letter-spacing:.5px;cursor:pointer}
 
 .notes{margin-top:26px}
@@ -220,6 +230,8 @@ var ICO = {
   plus:'<path d="M12 5.4v13.2M5.4 12h13.2"/>',
   croix:'<path d="M6.8 6.8 17.2 17.2M17.2 6.8 6.8 17.2"/>',
   carnet:'<rect x="4.6" y="3.6" width="14.8" height="16.8" rx="2.4"/><path d="M4.6 7.6h14.8"/><path d="M8 11.4h7M8 15.2h4.6"/>',
+  flechehaut:'<path d="M12 19.2V5.4M6.2 11.2 12 5.4l5.8 5.8"/>',
+  flechebas:'<path d="M12 4.8v13.8M6.2 12.8 12 18.6l5.8-5.8"/>',
   calendrier:'<rect x="3.6" y="5.4" width="16.8" height="15" rx="2.4"/><path d="M3.6 10h16.8M8.4 3.4v3.4M15.6 3.4v3.4"/>'
 };
 function svg(n,s,c){
@@ -426,7 +438,13 @@ function rendreMois(){
     document.getElementById('s-mois').innerHTML = h;
     return;
   }
-  h += '<div class="carte2 rav"><span>Reste à vivre du mois</span><b class="num">'+eur(soldeDepart(moisCourant),0)+'</b></div>';
+  if(m.lignes.length && !S.ravOuvert){
+    h += '<div class="ravmini" id="ravmini">'+svg('calendrier',16,'var(--or-sombre)')
+       + '<span>Reste à vivre du mois</span>'+svg('bas',16,'var(--or-sombre)')+'</div>';
+  } else {
+    h += '<div class="carte2 rav" id="ravplein"><span>Reste à vivre du mois</span>'
+       + '<b class="num">'+eur(soldeDepart(moisCourant),0)+'</b></div>';
+  }
   var l = m.lignes.slice().sort(function(a,b){
     if(a.date === b.date) return (b.ordre||0)-(a.ordre||0);
     return a.date < b.date ? 1 : -1;
@@ -446,7 +464,7 @@ function rendreMois(){
          + '</div>';
     }
   }
-  h += '</div><button class="bouton" id="ajouter">+ Ajouter</button>';
+  h += '</div>';
 
   if(!m.clos && moisCourant === moisComptable(new Date())){
     h += '<button class="boutonclos" id="cloturer">Clôturer '+libMois(moisCourant).split(' ')[0]+'</button>';
@@ -454,11 +472,30 @@ function rendreMois(){
   h += htmlNotes();
   document.getElementById('s-mois').innerHTML = h;
 
-  var b = document.getElementById('ajouter');
-  if(b) b.addEventListener('click', function(){ ouvrirLigne(null); });
   var c2 = document.getElementById('cloturer');
   if(c2) c2.addEventListener('click', demanderCloture);
+  var rm = document.getElementById('ravmini');
+  if(rm) rm.addEventListener('click', function(){ S.ravOuvert = true; sauver(); rendreMois(); });
+  var rp = document.getElementById('ravplein');
+  if(rp) rp.addEventListener('click', function(){
+    if(m.lignes.length){ S.ravOuvert = false; sauver(); rendreMois(); }
+  });
   brancherNotes();
+  majFlottant();
+}
+function majFlottant(){
+  var b = document.getElementById('flottant');
+  var m = S.mois[moisCourant];
+  var visible = (onglet === 'mois') && m && !m.clos;
+  if(visible && !b){
+    b = document.createElement('button');
+    b.id = 'flottant'; b.className = 'flottant'; b.setAttribute('aria-label','Ajouter');
+    b.innerHTML = svg('plus',24);
+    b.addEventListener('click', function(){ ouvrirLigne(null); });
+    document.body.appendChild(b);
+  } else if(!visible && b){
+    b.parentNode.removeChild(b);
+  }
 }
 function brancherNotes(){
   var t = document.getElementById('tetenotes');
@@ -489,19 +526,65 @@ function totauxCats(k){
   }
   return out;
 }
+function bilanMois(k){
+  var m = S.mois[k];
+  if(!m) return null;
+  var t = totauxCats(k), cats = S.reglages.cats, i, c;
+  var courant = 0, maxC = 0, sl = 0, el = 0;
+  for(i=0;i<cats.length;i++){
+    c = cats[i];
+    var s = t[c.id].sortie;
+    sl += s; el += t[c.id].entree;
+    if(c.groupe === 'courant'){ courant += s; if(s > maxC) maxC = s; }
+  }
+  var pas = totalPassifs(k), rep = Number(m.report)||0;
+  var sorties = sl + pas;
+  var entrees = el + (Number(m.retraite)||0);
+  return { t:t, courant:courant, maxC:maxC, passifs:pas, report:rep,
+           sorties:sorties, entrees:entrees, ecart:entrees-sorties, solde:solde(k) };
+}
+function anneesClos(){
+  var l = moisExistants(), out = {}, i;
+  for(i=0;i<l.length;i++){ if(S.mois[l[i]].clos) out[l[i].split('-')[0]] = 1; }
+  var a = Object.keys(out); a.sort(); a.reverse();
+  return a;
+}
+function ecartAnnee(an){
+  var l = moisExistants(), t = 0, i;
+  for(i=0;i<l.length;i++){
+    if(S.mois[l[i]].clos && l[i].indexOf(an+'-') === 0) t += bilanMois(l[i]).ecart;
+  }
+  return t;
+}
+function htmlReste(b){
+  var cats = S.reglages.cats, i, c, maxN = 0, nets = {};
+  for(i=0;i<cats.length;i++){
+    c = cats[i];
+    if(c.groupe !== 'autre') continue;
+    nets[c.id] = b.t[c.id].entree - b.t[c.id].sortie;
+    if(Math.abs(nets[c.id]) > maxN) maxN = Math.abs(nets[c.id]);
+  }
+  var h = '<div class="carte pad">';
+  for(i=0;i<cats.length;i++){
+    c = cats[i];
+    if(c.groupe !== 'autre') continue;
+    var net = nets[c.id], larg = maxN > 0 ? Math.round(Math.abs(net)/maxN*100) : 0;
+    var coul = net >= 0 ? 'var(--vert)' : 'var(--rouge)';
+    h += '<div class="barre"><div class="t"><span>'+svg(c.ico,16,c.couleur)+c.nom+'</span>'
+       + '<b><span style="color:var(--brun)">'+eur(-b.t[c.id].sortie,0)+'</span>'
+       + '<span style="color:var(--or-sombre)">·</span>'
+       + '<span style="color:var(--vert)">'+(b.t[c.id].entree?'+':'')+eur(b.t[c.id].entree,0)+'</span></b></div>'
+       + '<div class="piste"><i style="width:'+larg+'%;background:'+coul+'"></i></div></div>';
+  }
+  return h + '</div>';
+}
 function rendreBilan(){
   var k = moisCourant, m = S.mois[k];
   if(!m){ document.getElementById('s-bilan').innerHTML = '<div class="vide">Ce mois n\'est pas encore ouvert.</div>'; return; }
-  var t = totauxCats(k), tp = totauxCats(moisDecale(k,-1)), prec = S.mois[moisDecale(k,-1)];
-  var cats = S.reglages.cats, i, c, courant = 0, maxC = 0;
-  for(i=0;i<cats.length;i++){
-    c = cats[i];
-    if(c.groupe === 'courant'){ courant += t[c.id].sortie; if(t[c.id].sortie > maxC) maxC = t[c.id].sortie; }
-  }
-  var sl = 0, el = 0;
-  for(i=0;i<cats.length;i++){ sl += t[cats[i].id].sortie; el += t[cats[i].id].entree; }
-  var pas = totalPassifs(k), rep = Number(m.report)||0, rembours = rep < 0 ? -rep : 0;
-  var sorties = sl + pas + rembours, entrees = el + (Number(m.retraite)||0), ecart = entrees - sorties;
+  var b = bilanMois(k), t = b.t, tp = totauxCats(moisDecale(k,-1)), prec = S.mois[moisDecale(k,-1)];
+  var cats = S.reglages.cats, i, c;
+  var courant = b.courant, maxC = b.maxC, sorties = b.sorties, entrees = b.entrees, ecart = b.ecart;
+  var pas = b.passifs, rembours = b.report < 0 ? -b.report : 0;
 
   var h = '<div class="duo">'
     + '<div class="bloc"><div class="l">sorties</div><div class="v">'+eur(sorties,0)+'</div></div>'
@@ -525,20 +608,67 @@ function rendreBilan(){
     h += '<div class="barre"><div class="t"><span>'+svg(c.ico,16,c.couleur)+c.nom+'</span><b>'+eur(v,0)+fl+'</b></div>'
        + '<div class="piste"><i style="width:'+larg+'%;background:'+c.barre+'"></i></div></div>';
   }
-  h += '</div><div class="sstitre">le reste</div><div class="carte">';
-  for(i=0;i<cats.length;i++){
-    c = cats[i];
-    if(c.groupe !== 'autre') continue;
-    h += '<div class="rang"><span>'+svg(c.ico,16,c.couleur)+c.nom+'</span>'
-       + '<b>−'+Math.round(t[c.id].sortie)+' <span style="color:var(--brun)">/</span> <span style="color:var(--vert)">+'+Math.round(t[c.id].entree)+'</span></b></div>';
-  }
-  h += '</div><div class="sstitre" style="margin-top:18px">les fixes</div><div class="carte">'
+  h += '</div><div class="sstitre">le reste</div>' + htmlReste(b);
+  h += '<div class="sstitre" style="margin-top:18px">les fixes</div><div class="carte">'
      + '<div class="rang"><span>Passifs du mois</span><b>'+eur(pas,0)+'</b></div>'
-     + '<div class="rang"><span>Découvert reporté</span><b>'+eur(rembours,0)+'</b></div>'
      + '<div class="rang"><span>Retraite</span><b style="color:var(--vert)">'+eur(Number(m.retraite)||0,0)+'</b></div>'
-     + '</div>';
+     + '<div class="rang"><span style="color:var(--brun)">Découvert reporté<br><em style="font-style:normal;font-size:11px">pour mémoire, hors sorties</em></span>'
+     + '<b style="color:var(--brun)">'+eur(rembours,0)+'</b></div></div>';
+
+  var an = anneesClos();
+  if(an.length){
+    h += '<div class="sstitre" style="margin-top:18px">historique</div><div class="carte histo">';
+    for(i=0;i<an.length;i++){
+      var e = ecartAnnee(an[i]);
+      h += '<div class="rang" data-annee="'+an[i]+'"><span>'+an[i]+'</span>'
+         + '<b style="color:'+(e>=0?'var(--vert)':'var(--rouge)')+'">'+signe(e,0)+'</b></div>';
+    }
+    h += '</div>';
+  }
   h += '<div class="pied"><span>'+libMois(k)+'</span><span>'+m.lignes.length+' lignes</span></div>';
   document.getElementById('s-bilan').innerHTML = h;
+}
+
+function ouvrirAnnee(an){
+  var l = moisExistants(), h = '<h2>'+an+'</h2><div class="filet"></div><div class="carte histo">', n = 0, i;
+  for(i=l.length-1;i>=0;i--){
+    var k = l[i];
+    if(!S.mois[k].clos || k.indexOf(an+'-') !== 0) continue;
+    var e = bilanMois(k).ecart;
+    h += '<div class="rang" data-detail="'+k+'"><span>'+libMois(k).split(' ')[0]+'</span>'
+       + '<b style="color:'+(e>=0?'var(--vert)':'var(--rouge)')+'">'+signe(e,0)+'</b></div>';
+    n++;
+  }
+  h += '</div>';
+  if(!n) h = '<h2>'+an+'</h2><div class="filet"></div><div class="vide">Aucun mois clôturé.</div>';
+  ouvrirTiroir(h);
+}
+function ouvrirDetail(k){
+  var b = bilanMois(k), cats = S.reglages.cats, i, c;
+  if(!b) return;
+  var h = '<h2>'+libMois(k)+'</h2><div class="filet"></div>';
+  h += '<div class="duo">'
+     + '<div class="bloc"><div class="l">sorties</div><div class="v">'+eur(b.sorties,0)+'</div></div>'
+     + '<div class="bloc"><div class="l">entrées</div><div class="v">'+eur(b.entrees,0)+'</div></div></div>';
+  var coul = b.ecart >= 0 ? 'var(--vert)' : 'var(--rouge)';
+  h += '<div class="carte2 ecart"><div><div class="v" style="color:'+coul+'">'+signe(b.ecart,0)+'</div>'
+     + '<div class="p">solde de fin · '+eur(b.solde,0)+'</div></div>'
+     + '<span style="color:'+coul+';line-height:0">'+svg(b.ecart>=0?'hausse':'baisse',26)+'</span></div>';
+  h += '<div class="sstitre">le courant · '+eur(b.courant,0)+'</div><div class="carte pad">';
+  for(i=0;i<cats.length;i++){
+    c = cats[i];
+    if(c.groupe !== 'courant') continue;
+    var v = b.t[c.id].sortie, larg = b.maxC > 0 ? Math.round(v/b.maxC*100) : 0;
+    h += '<div class="barre"><div class="t"><span>'+svg(c.ico,16,c.couleur)+c.nom+'</span><b>'+eur(v,0)+'</b></div>'
+       + '<div class="piste"><i style="width:'+larg+'%;background:'+c.barre+'"></i></div></div>';
+  }
+  h += '</div><div class="sstitre">le reste</div>' + htmlReste(b);
+  h += '<div class="sstitre" style="margin-top:18px">les fixes</div><div class="carte">'
+     + '<div class="rang"><span>Passifs</span><b>'+eur(b.passifs,0)+'</b></div>'
+     + '<div class="rang"><span>Retraite</span><b style="color:var(--vert)">'+eur(Number(S.mois[k].retraite)||0,0)+'</b></div>'
+     + '<div class="rang"><span style="color:var(--brun)">Reporté du mois passé</span><b style="color:var(--brun)">'+eur(b.report,0)+'</b></div></div>';
+  h += '<div class="pied"><span>'+S.mois[k].lignes.length+' lignes</span><span>mois clôturé</span></div>';
+  document.getElementById('tiroir').innerHTML = h;
 }
 
 function rendrePassifs(){
@@ -554,15 +684,80 @@ function rendrePassifs(){
   if(!m.passifs.length) h += '<div class="vide">Aucun passif.</div>';
   for(i=0;i<m.passifs.length;i++){
     var p = m.passifs[i];
-    h += '<div class="ligne'+(p.passe?' valide':'')+'">'
+    h += '<div class="ligne pdrag" data-idx="'+i+'">'
        + '<button class="coche" data-passif="'+p.id+'">'+svg(p.passe?'coche':'case',18)+'</button>'
        + '<div class="corps" data-passifedit="'+p.id+'"><div class="lib">'+echap(p.nom)+'</div></div>'
-       + '<div class="mont num" data-passifedit="'+p.id+'">'+eur(Number(p.montant)||0,0)+'</div></div>';
+       + '<div class="mont num" data-passifedit="'+p.id+'">'+eur(Number(p.montant)||0,0)+'</div>'
+       + '<span class="poignee">'+svg('liste',17)+'</span></div>';
   }
   h += '</div><button class="bouton" id="addpassif">+ Ajouter un passif</button>';
   document.getElementById('s-passifs').innerHTML = h;
   var b = document.getElementById('addpassif');
   if(b) b.addEventListener('click', function(){ ouvrirPassif(null); });
+  brancherGlisser();
+}
+
+var dg = {actif:false, idx:-1, y0:0, hauteur:56, timer:null, el:null};
+function brancherGlisser(){
+  var zone = document.getElementById('s-passifs');
+  var rows = zone.querySelectorAll('.pdrag'), i;
+  for(i=0;i<rows.length;i++){
+    rows[i].addEventListener('touchstart', debutGlisser, {passive:true});
+    rows[i].addEventListener('touchmove', pendantGlisser, {passive:false});
+    rows[i].addEventListener('touchend', finGlisser, {passive:true});
+    rows[i].addEventListener('touchcancel', finGlisser, {passive:true});
+  }
+}
+function debutGlisser(e){
+  if(e.touches.length !== 1) return;
+  var el = e.currentTarget;
+  dg.y0 = e.touches[0].clientY;
+  dg.hauteur = el.offsetHeight || 56;
+  clearTimeout(dg.timer);
+  dg.timer = setTimeout(function(){
+    dg.actif = true;
+    dg.idx = parseInt(el.getAttribute('data-idx'),10);
+    dg.el = el;
+    el.classList.add('attrape');
+    if(navigator.vibrate) try { navigator.vibrate(18); } catch(err){}
+  }, 420);
+}
+function pendantGlisser(e){
+  if(!dg.actif){
+    if(Math.abs(e.touches[0].clientY - dg.y0) > 8) clearTimeout(dg.timer);
+    return;
+  }
+  e.preventDefault();
+  var d = e.touches[0].clientY - dg.y0;
+  var pas = Math.round(d / dg.hauteur);
+  if(pas === 0) return;
+  var m = S.mois[moisCourant];
+  var cible = Math.max(0, Math.min(m.passifs.length-1, dg.idx + pas));
+  if(cible === dg.idx) return;
+  var item = m.passifs.splice(dg.idx,1)[0];
+  m.passifs.splice(cible,0,item);
+  dg.idx = cible;
+  dg.y0 = e.touches[0].clientY;
+  rendrePassifs();
+  var nv = document.querySelector('#s-passifs .pdrag[data-idx="'+cible+'"]');
+  if(nv){ nv.classList.add('attrape'); dg.el = nv; }
+}
+function finGlisser(){
+  clearTimeout(dg.timer);
+  if(dg.actif){
+    if(dg.el) dg.el.classList.remove('attrape');
+    sauver(); rendrePassifs(); toast('Ordre enregistré');
+  }
+  dg.actif = false; dg.idx = -1; dg.el = null;
+}
+function deplacerPassif(id, sens){
+  var m = S.mois[moisCourant], i, pos = -1;
+  for(i=0;i<m.passifs.length;i++){ if(m.passifs[i].id === id) pos = i; }
+  var cible = pos + sens;
+  if(pos < 0 || cible < 0 || cible >= m.passifs.length) return;
+  var item = m.passifs.splice(pos,1)[0];
+  m.passifs.splice(cible,0,item);
+  sauver(); rendre(); toast('Déplacé');
 }
 
 function rendre(){
@@ -570,6 +765,7 @@ function rendre(){
   if(onglet === 'mois') rendreMois();
   if(onglet === 'bilan') rendreBilan();
   if(onglet === 'passifs') rendrePassifs();
+  majFlottant();
 }
 
 function allerOnglet(nom, sansHisto){
@@ -723,7 +919,12 @@ function enregistrerLigne(){
     S.mois[cible].lignes.push({id:uid(), date:date, libelle:lib, montant:montant, cat:t.dataset.cat, valide:false, ordre:Date.now()});
     if(cible !== moisCourant){ moisCourant = cible; toast('Ligne rangée dans '+libMois(cible)); }
   }
-  sauver(); fermerEtRevenir(); rendre();
+  sauver(); rendre(); toast('Enregistré');
+  if(!edition){
+    document.getElementById('f-montant').value = '';
+    document.getElementById('f-lib').value = '';
+    setTimeout(function(){ var f = document.getElementById('f-montant'); if(f) f.focus(); }, 60);
+  }
 }
 function supprimerLigne(){
   var m = S.mois[moisCourant], garde = [], i;
@@ -783,6 +984,10 @@ function ouvrirPassif(id){
   var h = '<h2>'+(p?'Modifier le passif':'Nouveau passif')+'</h2><div class="filet"></div>';
   h += '<div class="champ"><label>Nom</label><input type="text" id="p-nom" value="'+(p?echap(p.nom):'')+'" placeholder="Netflix"></div>';
   h += '<div class="champ"><label>Montant mensuel</label><input type="text" inputmode="decimal" id="p-montant" value="'+(p?String(p.montant).replace('.',','):'')+'" placeholder="15"></div>';
+  if(p){
+    h += '<div class="fleches"><button id="p-haut">'+svg('flechehaut',18)+'</button>'
+       + '<button id="p-bas">'+svg('flechebas',18)+'</button></div>';
+  }
   h += '<div class="actions">'+(p?'<button class="danger" id="p-suppr">'+svg('croix',18)+'</button>':'')
      + '<button class="plein" id="p-ok">Enregistrer</button></div>';
   h += '<div class="note2">Le passif se reporte sur les mois suivants. Les mois déjà clôturés ne bougent pas.</div>';
@@ -795,8 +1000,17 @@ function ouvrirPassif(id){
     if(edition){
       for(j=0;j<mm.passifs.length;j++){ if(mm.passifs[j].id === edition){ mm.passifs[j].nom = nom; mm.passifs[j].montant = v; } }
     } else { mm.passifs.push({id:uid(), nom:nom, montant:v, passe:false}); }
-    sauver(); fermerEtRevenir(); rendre();
+    sauver(); rendre(); toast('Enregistré');
+    if(!edition){
+      document.getElementById('p-nom').value = '';
+      document.getElementById('p-montant').value = '';
+      setTimeout(function(){ var f = document.getElementById('p-nom'); if(f) f.focus(); }, 60);
+    }
   });
+  var ph = document.getElementById('p-haut');
+  if(ph) ph.addEventListener('click', function(){ deplacerPassif(edition,-1); });
+  var pb = document.getElementById('p-bas');
+  if(pb) pb.addEventListener('click', function(){ deplacerPassif(edition,1); });
   var sp = document.getElementById('p-suppr');
   if(sp) sp.addEventListener('click', function(){
     var mm = S.mois[moisCourant], garde = [], j;
@@ -813,7 +1027,12 @@ function ouvrirReglages(){
     h += '<div class="reg"><span>Retraite</span><input type="text" inputmode="decimal" id="r-retraite" value="'+m.retraite+'"></div>';
     var etiq = (moisCourant === premierK()) ? 'Solde de départ' : 'Reporté du mois passé';
     if(!m.clos){
-      h += '<div class="reg"><span>'+etiq+'</span><input type="text" inputmode="decimal" id="r-report" value="'+(Number(m.report)||0)+'"></div>';
+      var rv = Number(m.report)||0, neg = rv < 0;
+      h += '<div class="champ" style="margin-top:14px"><label>'+etiq+'</label>'
+         + '<div class="sens" style="margin-bottom:10px">'
+         + '<button data-rep="moins" class="'+(neg?'on':'')+'">Découvert</button>'
+         + '<button data-rep="plus" class="'+(neg?'':'on')+'">Positif</button></div>'
+         + '<input type="text" inputmode="decimal" id="r-report" value="'+Math.abs(rv)+'"></div>';
     } else {
       h += '<div class="reg"><span>'+etiq+'</span><b class="num">'+eur(Number(m.report)||0,0)+'</b></div>';
     }
@@ -836,7 +1055,10 @@ function ouvrirReglages(){
       var rr = document.getElementById('r-retraite');
       if(rr){ v = parseFloat(rr.value.replace(',','.')); if(!isNaN(v)) mm.retraite = v; }
       var rp = document.getElementById('r-report');
-      if(rp){ v = parseFloat(rp.value.replace(',','.')); if(!isNaN(v)) mm.report = v; }
+      if(rp){
+        v = parseFloat(rp.value.replace(',','.'));
+        if(!isNaN(v)) mm.report = (document.getElementById('tiroir').dataset.rep === 'moins') ? -Math.abs(v) : Math.abs(v);
+      }
     }
     v = parseFloat(document.getElementById('r-plafond').value.replace(',','.'));
     if(!isNaN(v)) S.reglages.plafond = v;
@@ -845,10 +1067,20 @@ function ouvrirReglages(){
       var id = noms[j].getAttribute('data-catnom'), val = noms[j].value.trim();
       if(val){ for(var q=0;q<S.reglages.cats.length;q++){ if(S.reglages.cats[q].id === id) S.reglages.cats[q].nom = val; } }
     }
-    sauver(); fermerEtRevenir(); rendre();
+    sauver(); rendre(); toast('Enregistré');
   });
   document.getElementById('r-export').addEventListener('click', exporter);
   document.getElementById('r-import').addEventListener('click', importer);
+  var tr = document.getElementById('tiroir');
+  tr.dataset.rep = (m && (Number(m.report)||0) < 0) ? 'moins' : 'plus';
+  var rb = tr.querySelectorAll('[data-rep]');
+  for(i=0;i<rb.length;i++){
+    rb[i].addEventListener('click', function(){
+      var bb = tr.querySelectorAll('[data-rep]');
+      for(var j=0;j<bb.length;j++) bb[j].classList.remove('on');
+      this.classList.add('on'); tr.dataset.rep = this.getAttribute('data-rep');
+    });
+  }
 }
 
 function exporter(){
@@ -910,9 +1142,12 @@ function init(){
     if((el = e.target.closest('[data-edit]'))){ ouvrirLigne(el.getAttribute('data-edit')); return; }
     if((el = e.target.closest('[data-supnote]'))){ supprimerNote(el.getAttribute('data-supnote')); return; }
     if((el = e.target.closest('[data-note]'))){ basculerNote(el.getAttribute('data-note')); return; }
+    if((el = e.target.closest('[data-annee]'))){ ouvrirAnnee(el.getAttribute('data-annee')); return; }
   });
   document.getElementById('tiroir').addEventListener('click', function(e){
     if(!e.target.closest) return;
+    var ed = e.target.closest('[data-detail]');
+    if(ed){ ouvrirDetail(ed.getAttribute('data-detail')); return; }
     var el = e.target.closest('[data-mois]');
     if(el){
       var k = el.getAttribute('data-mois');
