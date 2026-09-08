@@ -82,6 +82,12 @@ section.on{display:block}
 .fleches{display:flex;gap:8px;margin-bottom:14px}
 .fleches button{flex:1;padding:10px;border-radius:8px;border:.5px solid var(--or-sombre);background:none;color:var(--sable);cursor:pointer;line-height:0}
 .histo .rang{cursor:pointer}
+.courbewrap{position:relative}
+.courbetabs{display:flex;gap:8px;margin-bottom:10px}
+.courbetabs button{padding:7px 16px;border-radius:16px;border:.5px solid var(--or-sombre);background:none;color:var(--brun);font-size:12px;cursor:pointer}
+.courbetabs button.on{border-color:var(--or);color:var(--sable);background:var(--carte2)}
+.courbesvg{width:100%;display:block;touch-action:pan-y}
+.pointclic{cursor:pointer}
 .boutonclos{display:block;width:100%;margin:26px 0 0;border:.5px solid var(--or);background:none;border-radius:22px;padding:12px;font-size:13px;color:var(--or);letter-spacing:.5px;cursor:pointer}
 
 .notes{margin-top:26px}
@@ -110,8 +116,14 @@ section.on{display:block}
 .barre .t{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
 .barre .t span{font-size:13px;color:var(--creme2);display:flex;align-items:center;gap:7px}
 .barre .t b{font-family:var(--serif);font-weight:400;font-size:15px;color:var(--creme);display:flex;align-items:center;gap:4px}
-.piste{height:2px;background:var(--trait);border-radius:1px;overflow:hidden}
+.piste{position:relative;height:2px;background:var(--trait);border-radius:1px;overflow:visible}
 .piste i{display:block;height:100%;border-radius:1px}
+.piste i.depasse{background:var(--rouge)!important}
+.piste i.depassebien{background:var(--vert)!important}
+.repere{position:absolute;top:-3px;width:1px;height:8px;background:var(--or);opacity:.8}
+.pistebi{position:relative;height:2px;background:var(--trait);border-radius:1px;margin-top:2px}
+.pistebi .axe{position:absolute;left:50%;top:-3px;width:1px;height:8px;background:var(--or-sombre)}
+.pistebi .segb{position:absolute;top:0;height:100%;border-radius:1px}
 .pad{padding:15px 15px 4px}
 .rang{display:flex;justify-content:space-between;align-items:baseline;padding:12px 15px;border-bottom:.5px solid var(--trait)}
 .rang:last-child{border-bottom:none}
@@ -239,13 +251,13 @@ function svg(n,s,c){
 }
 
 var CATS_DEF = [
-  {id:'courses',  nom:'Courses',     ico:'panier', couleur:'#C0DD97', barre:'#97C459', groupe:'courant'},
-  {id:'route',    nom:'Route',       ico:'volant', couleur:'#B5D4F4', barre:'#85B7EB', groupe:'courant'},
-  {id:'tabac',    nom:'Tabac/CBD',   ico:'flamme', couleur:'#D3D1C7', barre:'#B4B2A9', groupe:'courant'},
-  {id:'perso',    nom:'Pour moi',    ico:'etoile', couleur:'#F4C0D1', barre:'#ED93B1', groupe:'courant'},
-  {id:'gourmand', nom:'Gourmandise', ico:'pain',   couleur:'#FAC775', barre:'#EF9F27', groupe:'courant'},
-  {id:'domaine',  nom:'Le domaine',  ico:'maison', couleur:'#9FE1CB', barre:'#5DCAA5', groupe:'autre'},
-  {id:'livres',   nom:'Les livres',  ico:'livre',  couleur:'#CECBF6', barre:'#AFA9EC', groupe:'autre'},
+  {id:'courses',  nom:'Courses',     ico:'panier', couleur:'#C0DD97', barre:'#97C459', groupe:'courant', seuil:550},
+  {id:'route',    nom:'Route',       ico:'volant', couleur:'#B5D4F4', barre:'#85B7EB', groupe:'courant', seuil:175},
+  {id:'tabac',    nom:'Tabac/CBD',   ico:'flamme', couleur:'#D3D1C7', barre:'#B4B2A9', groupe:'courant', seuil:100},
+  {id:'perso',    nom:'Pour moi',    ico:'etoile', couleur:'#F4C0D1', barre:'#ED93B1', groupe:'courant', seuil:175},
+  {id:'gourmand', nom:'Gourmandise', ico:'pain',   couleur:'#FAC775', barre:'#EF9F27', groupe:'courant', seuil:50},
+  {id:'domaine',  nom:'Le domaine',  ico:'maison', couleur:'#9FE1CB', barre:'#5DCAA5', groupe:'autre', seuilMin:-200, seuilMax:500},
+  {id:'livres',   nom:'Les livres',  ico:'livre',  couleur:'#CECBF6', barre:'#AFA9EC', groupe:'autre', seuil:620},
   {id:'reste',    nom:'Le reste',    ico:'points', couleur:'#F5C4B3', barre:'#F0997B', groupe:'autre'}
 ];
 var PASSIFS_DEF = [
@@ -302,12 +314,25 @@ function charger(){
   if(!S) S = { version:2, reglages:{plafond:600, retraite:745, cats:CATS_DEF}, notes:[], repli:true, mois:{} };
   if(!S.reglages) S.reglages = {plafond:600, retraite:745, cats:CATS_DEF};
   if(!S.reglages.cats || S.reglages.cats.length !== CATS_DEF.length) S.reglages.cats = CATS_DEF;
+  fusionnerSeuils();
+  if(S.reglages.dette === undefined) S.reglages.dette = 0;
   if(!S.notes) S.notes = [];
   if(S.repli === undefined) S.repli = true;
   if(!S.mois) S.mois = {};
   migrer();
   if(!moisExistants().length) premierMois();
   rattraper();
+}
+function fusionnerSeuils(){
+  var i, j, base;
+  for(i=0;i<S.reglages.cats.length;i++){
+    var c = S.reglages.cats[i], def = null;
+    for(j=0;j<CATS_DEF.length;j++){ if(CATS_DEF[j].id === c.id) def = CATS_DEF[j]; }
+    if(!def) continue;
+    if(def.seuil !== undefined && c.seuil === undefined) c.seuil = def.seuil;
+    if(def.seuilMin !== undefined && c.seuilMin === undefined) c.seuilMin = def.seuilMin;
+    if(def.seuilMax !== undefined && c.seuilMax === undefined) c.seuilMax = def.seuilMax;
+  }
 }
 function migrer(){
   if(S.version === 2) return;
@@ -556,25 +581,55 @@ function ecartAnnee(an){
   }
   return t;
 }
-function htmlReste(b){
-  var cats = S.reglages.cats, i, c, maxN = 0, nets = {};
-  for(i=0;i<cats.length;i++){
-    c = cats[i];
-    if(c.groupe !== 'autre') continue;
-    nets[c.id] = b.t[c.id].entree - b.t[c.id].sortie;
-    if(Math.abs(nets[c.id]) > maxN) maxN = Math.abs(nets[c.id]);
+function barreSeuil(v, seuil, couleur, bon){
+  if(!seuil || seuil <= 0){
+    return '<div class="piste"><i style="width:0%;background:'+couleur+'"></i></div>';
   }
-  var h = '<div class="carte pad">';
+  var pct = Math.min(100, Math.round(v/seuil*100));
+  var h = '<div class="piste"><i style="width:'+pct+'%;background:'+couleur+'"></i>';
+  h += '<span class="repere" style="left:calc(100% - 1px)"></span>';
+  if(v > seuil){
+    var d = Math.min(30, Math.round((v-seuil)/seuil*100));
+    h += '<i class="'+(bon?'depassebien':'depasse')+'" style="position:absolute;left:100%;width:'+d+'%;height:100%;border-radius:1px"></i>';
+  }
+  h += '</div>';
+  return h;
+}
+function barreBipolaire(net, min, max, couleur){
+  min = Number(min)||-1; max = Number(max)||1;
+  var etendue = max - min;
+  var pos = ((net - min) / etendue) * 100;
+  pos = Math.max(-15, Math.min(115, pos));
+  var zero = (0 - min) / etendue * 100;
+  var gauche, larg, coul;
+  if(net >= 0){ gauche = zero; larg = Math.min(pos,100) - zero; }
+  else { gauche = Math.max(pos,0); larg = zero - gauche; }
+  var horsBornes = (net < min) || (net > max);
+  coul = horsBornes ? (net > max ? 'var(--vert)' : 'var(--rouge)') : couleur;
+  var h = '<div class="pistebi">';
+  h += '<div class="segb" style="left:'+gauche+'%;width:'+Math.max(0,larg)+'%;background:'+coul+'"></div>';
+  h += '<span class="axe"></span>';
+  h += '</div>';
+  return h;
+}
+function htmlReste(b){
+  var cats = S.reglages.cats, i, c, h = '<div class="carte pad">';
   for(i=0;i<cats.length;i++){
     c = cats[i];
     if(c.groupe !== 'autre') continue;
-    var net = nets[c.id], larg = maxN > 0 ? Math.round(Math.abs(net)/maxN*100) : 0;
-    var coul = net >= 0 ? 'var(--vert)' : 'var(--rouge)';
-    h += '<div class="barre"><div class="t"><span>'+svg(c.ico,16,c.couleur)+c.nom+'</span>'
-       + '<b><span style="color:var(--brun)">'+eur(-b.t[c.id].sortie,0)+'</span>'
+    var net = b.t[c.id].entree - b.t[c.id].sortie;
+    var montants = '<b><span style="color:var(--brun)">'+eur(-b.t[c.id].sortie,0)+'</span>'
        + '<span style="color:var(--or-sombre)">·</span>'
-       + '<span style="color:var(--vert)">'+(b.t[c.id].entree?'+':'')+eur(b.t[c.id].entree,0)+'</span></b></div>'
-       + '<div class="piste"><i style="width:'+larg+'%;background:'+coul+'"></i></div></div>';
+       + '<span style="color:var(--vert)">'+(b.t[c.id].entree?'+':'')+eur(b.t[c.id].entree,0)+'</span></b>';
+    h += '<div class="barre"><div class="t"><span>'+svg(c.ico,16,c.couleur)+c.nom+'</span>'+montants+'</div>';
+    if(c.id === 'domaine'){
+      h += barreBipolaire(net, c.seuilMin, c.seuilMax, c.barre);
+    } else if(c.seuil){
+      h += barreSeuil(Math.max(0,net), c.seuil, c.barre, true);
+    } else {
+      h += '<div class="piste"></div>';
+    }
+    h += '</div>';
   }
   return h + '</div>';
 }
@@ -599,17 +654,17 @@ function rendreBilan(){
   for(i=0;i<cats.length;i++){
     c = cats[i];
     if(c.groupe !== 'courant') continue;
-    var v = t[c.id].sortie, larg = maxC > 0 ? Math.round(v/maxC*100) : 0, fl = '';
+    var v = t[c.id].sortie, fl = '';
     if(prec){
       var av = tp[c.id] ? tp[c.id].sortie : 0;
       if(v > av*1.1 && v-av > 15) fl = '<span style="color:var(--rouge);line-height:0">'+svg('fleched',13)+'</span>';
       else if(v < av*0.9 && av-v > 15) fl = '<span style="color:var(--vert);line-height:0">'+svg('flecheb',13)+'</span>';
     }
     h += '<div class="barre"><div class="t"><span>'+svg(c.ico,16,c.couleur)+c.nom+'</span><b>'+eur(v,0)+fl+'</b></div>'
-       + '<div class="piste"><i style="width:'+larg+'%;background:'+c.barre+'"></i></div></div>';
+       + barreSeuil(v, c.seuil, c.barre, false) + '</div>';
   }
-  h += '</div><div class="sstitre">le reste</div>' + htmlReste(b);
-  h += '<div class="sstitre" style="margin-top:18px">les fixes</div><div class="carte">'
+  h += '</div><div class="sstitre">les activités</div>' + htmlReste(b);
+  h += '<div class="sstitre" style="margin-top:18px">l\'immuable</div><div class="carte">'
      + '<div class="rang"><span>Passifs du mois</span><b>'+eur(pas,0)+'</b></div>'
      + '<div class="rang"><span>Retraite</span><b style="color:var(--vert)">'+eur(Number(m.retraite)||0,0)+'</b></div>'
      + '<div class="rang"><span style="color:var(--brun)">Découvert reporté<br><em style="font-style:normal;font-size:11px">pour mémoire, hors sorties</em></span>'
@@ -617,16 +672,68 @@ function rendreBilan(){
 
   var an = anneesClos();
   if(an.length){
-    h += '<div class="sstitre" style="margin-top:18px">historique</div><div class="carte histo">';
-    for(i=0;i<an.length;i++){
-      var e = ecartAnnee(an[i]);
-      h += '<div class="rang" data-annee="'+an[i]+'"><span>'+an[i]+'</span>'
-         + '<b style="color:'+(e>=0?'var(--vert)':'var(--rouge)')+'">'+signe(e,0)+'</b></div>';
-    }
-    h += '</div>';
+    h += '<div class="sstitre" style="margin-top:18px">historique</div><div class="carte pad courbewrap" id="courbewrap"></div>';
   }
   h += '<div class="pied"><span>'+libMois(k)+'</span><span>'+m.lignes.length+' lignes</span></div>';
   document.getElementById('s-bilan').innerHTML = h;
+  if(an.length) dessinerCourbe();
+}
+
+var courbeVue = 'annee';
+function pointsCourbe(){
+  var l = moisExistants(), pts = [], i;
+  var anCourante = moisComptable(new Date()).split('-')[0];
+  for(i=0;i<l.length;i++){
+    var kk = l[i];
+    if(!S.mois[kk].clos) continue;
+    if(courbeVue === 'annee' && kk.indexOf(anCourante+'-') !== 0) continue;
+    pts.push({ k:kk, e: bilanMois(kk).ecart });
+  }
+  return pts;
+}
+function dessinerCourbe(){
+  var wrap = document.getElementById('courbewrap');
+  if(!wrap) return;
+  var pts = pointsCourbe();
+  var h = '<div class="courbetabs">'
+    + '<button data-cv="annee" class="'+(courbeVue==='annee'?'on':'')+'">Année</button>'
+    + '<button data-cv="tout" class="'+(courbeVue==='tout'?'on':'')+'">Tout</button></div>';
+  if(pts.length < 2){
+    h += '<div class="vide" style="padding:18px 4px">Pas encore assez de mois clôturés.</div>';
+    wrap.innerHTML = h;
+    var bb = wrap.querySelectorAll('[data-cv]'), j;
+    for(j=0;j<bb.length;j++){ bb[j].addEventListener('click', function(){ courbeVue = this.getAttribute('data-cv'); dessinerCourbe(); }); }
+    return;
+  }
+  var W = 320, H = 150, padX = 14, padY = 16;
+  var maxE = 0, i;
+  for(i=0;i<pts.length;i++){ if(Math.abs(pts[i].e) > maxE) maxE = Math.abs(pts[i].e); }
+  maxE = Math.max(maxE, 50) * 1.15;
+  var n = pts.length;
+  function X(i2){ return padX + (n===1?0:(i2/(n-1))*(W-padX*2)); }
+  function Y(v){ return H/2 - (v/maxE)*(H/2-padY); }
+  var d = '', i2;
+  for(i2=0;i2<n;i2++){ d += (i2===0?'M':'L') + X(i2).toFixed(1) + ',' + Y(pts[i2].e).toFixed(1) + ' '; }
+  var zoneHaut = 'M'+padX+','+(H/2)+' L'+padX+','+padY+' L'+(W-padX)+','+padY+' L'+(W-padX)+','+(H/2)+' Z';
+  var zoneBas  = 'M'+padX+','+(H/2)+' L'+padX+','+(H-padY)+' L'+(W-padX)+','+(H-padY)+' L'+(W-padX)+','+(H/2)+' Z';
+  var svgc = '<svg class="courbesvg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">'
+    + '<path d="'+zoneHaut+'" fill="var(--vert)" opacity="0.06"/>'
+    + '<path d="'+zoneBas+'" fill="var(--rouge)" opacity="0.06"/>'
+    + '<line x1="'+padX+'" y1="'+(H/2)+'" x2="'+(W-padX)+'" y2="'+(H/2)+'" stroke="var(--or-sombre)" stroke-width="1" stroke-dasharray="3,3"/>'
+    + '<path d="'+d+'" fill="none" stroke="var(--or)" stroke-width="2"/>';
+  for(i2=0;i2<n;i2++){
+    svgc += '<circle class="pointclic" data-detail="'+pts[i2].k+'" cx="'+X(i2).toFixed(1)+'" cy="'+Y(pts[i2].e).toFixed(1)+'" r="9" fill="transparent"/>';
+    svgc += '<circle cx="'+X(i2).toFixed(1)+'" cy="'+Y(pts[i2].e).toFixed(1)+'" r="3" fill="'+(pts[i2].e>=0?'#C0DD97':'#F0997B')+'" stroke="var(--noir)" stroke-width="1"/>';
+  }
+  svgc += '</svg>';
+  var lab = '<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--brun);margin-top:4px">'
+    + '<span>'+MOISCOURT[parseInt(pts[0].k.split('-')[1],10)-1]+' '+pts[0].k.split('-')[0].slice(2)+'</span>'
+    + '<span>'+MOISCOURT[parseInt(pts[n-1].k.split('-')[1],10)-1]+' '+pts[n-1].k.split('-')[0].slice(2)+'</span></div>';
+  wrap.innerHTML = h + svgc + lab;
+  var btns = wrap.querySelectorAll('[data-cv]'), jj;
+  for(jj=0;jj<btns.length;jj++){ btns[jj].addEventListener('click', function(){ courbeVue = this.getAttribute('data-cv'); dessinerCourbe(); }); }
+  var pts2 = wrap.querySelectorAll('[data-detail]'), kk2;
+  for(kk2=0;kk2<pts2.length;kk2++){ pts2[kk2].addEventListener('click', function(){ ouvrirDetail(this.getAttribute('data-detail')); }); }
 }
 
 function ouvrirAnnee(an){
@@ -658,12 +765,12 @@ function ouvrirDetail(k){
   for(i=0;i<cats.length;i++){
     c = cats[i];
     if(c.groupe !== 'courant') continue;
-    var v = b.t[c.id].sortie, larg = b.maxC > 0 ? Math.round(v/b.maxC*100) : 0;
+    var v = b.t[c.id].sortie;
     h += '<div class="barre"><div class="t"><span>'+svg(c.ico,16,c.couleur)+c.nom+'</span><b>'+eur(v,0)+'</b></div>'
-       + '<div class="piste"><i style="width:'+larg+'%;background:'+c.barre+'"></i></div></div>';
+       + barreSeuil(v, c.seuil, c.barre, false) + '</div>';
   }
-  h += '</div><div class="sstitre">le reste</div>' + htmlReste(b);
-  h += '<div class="sstitre" style="margin-top:18px">les fixes</div><div class="carte">'
+  h += '</div><div class="sstitre">les activités</div>' + htmlReste(b);
+  h += '<div class="sstitre" style="margin-top:18px">l\'immuable</div><div class="carte">'
      + '<div class="rang"><span>Passifs</span><b>'+eur(b.passifs,0)+'</b></div>'
      + '<div class="rang"><span>Retraite</span><b style="color:var(--vert)">'+eur(Number(S.mois[k].retraite)||0,0)+'</b></div>'
      + '<div class="rang"><span style="color:var(--brun)">Reporté du mois passé</span><b style="color:var(--brun)">'+eur(b.report,0)+'</b></div></div>';
@@ -1020,6 +1127,13 @@ function ouvrirPassif(id){
 }
 
 function ouvrirReglages(){
+  dessinerReglagesPrincipal();
+  empiler('tiroir');
+  document.getElementById('tiroir').classList.add('on');
+  document.getElementById('voile').classList.add('on');
+  tiroirOuvert = true;
+}
+function dessinerReglagesPrincipal(){
   var m = S.mois[moisCourant], i;
   var h = '<h2>Réglages</h2><div class="filet"></div>';
   if(m){
@@ -1038,16 +1152,13 @@ function ouvrirReglages(){
     }
   }
   h += '<div class="reg"><span>Découvert autorisé</span><input type="text" inputmode="decimal" id="r-plafond" value="'+S.reglages.plafond+'"></div>';
-  h += '<div class="sstitre" style="margin-top:20px">les catégories</div>';
-  for(i=0;i<S.reglages.cats.length;i++){
-    var c = S.reglages.cats[i];
-    h += '<div class="reg"><span style="line-height:0">'+svg(c.ico,19,c.couleur)+'</span>'
-       + '<input class="nom" type="text" data-catnom="'+c.id+'" value="'+echap(c.nom)+'"></div>';
-  }
+  h += '<div class="reg"><span>Dette (hors calculs)</span><input type="text" inputmode="decimal" id="r-dette" value="'+(Number(S.reglages.dette)||0)+'"></div>';
+  h += '<div class="rang" id="r-cats" style="margin-top:16px;background:var(--carte);border-radius:10px;padding:12px 15px;cursor:pointer"><span>Catégories</span>'
+     + '<span style="line-height:0;color:var(--or-sombre)">'+svg('droite',16)+'</span></div>';
   h += '<div class="actions"><button id="r-export">Exporter</button><button id="r-import">Importer</button></div>';
   h += '<div class="actions"><button class="plein" id="r-ok">Enregistrer</button></div>';
-  h += '<div class="note2">Le report se corrige tant que le mois n\'est pas clôturé. Le mois comptable se clôture le '+JOURCLOTURE+'. Après cette date, les saisies vont sur le mois suivant. L\'export enregistre une sauvegarde de tous tes mois.</div>';
-  ouvrirTiroir(h);
+  h += '<div class="note2">Le report se corrige tant que le mois n\'est pas clôturé. Le mois comptable se clôture le '+JOURCLOTURE+'. Après cette date, les saisies vont sur le mois suivant. La dette n\'entre dans aucun calcul, elle est juste gardée en mémoire. L\'export enregistre une sauvegarde de tous tes mois.</div>';
+  document.getElementById('tiroir').innerHTML = h;
 
   document.getElementById('r-ok').addEventListener('click', function(){
     var mm = S.mois[moisCourant], v, j;
@@ -1062,15 +1173,13 @@ function ouvrirReglages(){
     }
     v = parseFloat(document.getElementById('r-plafond').value.replace(',','.'));
     if(!isNaN(v)) S.reglages.plafond = v;
-    var noms = document.querySelectorAll('[data-catnom]');
-    for(j=0;j<noms.length;j++){
-      var id = noms[j].getAttribute('data-catnom'), val = noms[j].value.trim();
-      if(val){ for(var q=0;q<S.reglages.cats.length;q++){ if(S.reglages.cats[q].id === id) S.reglages.cats[q].nom = val; } }
-    }
+    var rd = document.getElementById('r-dette');
+    if(rd){ v = parseFloat(rd.value.replace(',','.')); if(!isNaN(v)) S.reglages.dette = v; }
     sauver(); rendre(); toast('Enregistré');
   });
   document.getElementById('r-export').addEventListener('click', exporter);
   document.getElementById('r-import').addEventListener('click', importer);
+  document.getElementById('r-cats').addEventListener('click', dessinerReglagesCategories);
   var tr = document.getElementById('tiroir');
   tr.dataset.rep = (m && (Number(m.report)||0) < 0) ? 'moins' : 'plus';
   var rb = tr.querySelectorAll('[data-rep]');
@@ -1081,6 +1190,58 @@ function ouvrirReglages(){
       this.classList.add('on'); tr.dataset.rep = this.getAttribute('data-rep');
     });
   }
+}
+function dessinerReglagesCategories(){
+  var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">'
+    + '<button id="rc-retour" style="background:none;border:none;color:var(--or);line-height:0;padding:4px;cursor:pointer">'+svg('gauche',20)+'</button>'
+    + '<h2 style="flex:1;margin:0">Catégories</h2></div><div class="filet"></div>';
+  var i;
+  for(i=0;i<S.reglages.cats.length;i++){
+    var c = S.reglages.cats[i];
+    h += '<div class="champ" style="margin-bottom:16px">'
+       + '<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">'
+       + svg(c.ico,19,c.couleur) + '<input type="text" data-catnom="'+c.id+'" value="'+echap(c.nom)+'" style="flex:1"></div>';
+    if(c.id === 'domaine'){
+      h += '<div style="display:flex;gap:9px">'
+         + '<div style="flex:1"><label style="display:block;font-size:10px;color:var(--brun);margin-bottom:4px">limite découvert</label>'
+         + '<input type="text" inputmode="decimal" data-seuilmin="'+c.id+'" value="'+Math.abs(c.seuilMin||0)+'"></div>'
+         + '<div style="flex:1"><label style="display:block;font-size:10px;color:var(--brun);margin-bottom:4px">objectif recettes</label>'
+         + '<input type="text" inputmode="decimal" data-seuilmax="'+c.id+'" value="'+(c.seuilMax||0)+'"></div></div>';
+    } else if(c.seuil !== undefined){
+      h += '<label style="display:block;font-size:10px;color:var(--brun);margin-bottom:4px">seuil mensuel</label>'
+         + '<input type="text" inputmode="decimal" data-seuil="'+c.id+'" value="'+c.seuil+'">';
+    } else {
+      h += '<div class="note2" style="margin:0">sans limite</div>';
+    }
+    h += '</div>';
+  }
+  h += '<div class="actions"><button class="plein" id="rc-ok">Enregistrer</button></div>';
+  document.getElementById('tiroir').innerHTML = h;
+  document.getElementById('rc-retour').addEventListener('click', dessinerReglagesPrincipal);
+  document.getElementById('rc-ok').addEventListener('click', function(){
+    var noms = document.querySelectorAll('[data-catnom]'), j, q;
+    for(j=0;j<noms.length;j++){
+      var id = noms[j].getAttribute('data-catnom'), val = noms[j].value.trim();
+      if(val){ for(q=0;q<S.reglages.cats.length;q++){ if(S.reglages.cats[q].id === id) S.reglages.cats[q].nom = val; } }
+    }
+    var seuils = document.querySelectorAll('[data-seuil]');
+    for(j=0;j<seuils.length;j++){
+      var id2 = seuils[j].getAttribute('data-seuil'), v2 = parseFloat(seuils[j].value.replace(',','.'));
+      if(!isNaN(v2)){ for(q=0;q<S.reglages.cats.length;q++){ if(S.reglages.cats[q].id === id2) S.reglages.cats[q].seuil = v2; } }
+    }
+    var smin = document.querySelectorAll('[data-seuilmin]');
+    for(j=0;j<smin.length;j++){
+      var id3 = smin[j].getAttribute('data-seuilmin'), v3 = parseFloat(smin[j].value.replace(',','.'));
+      if(!isNaN(v3)){ for(q=0;q<S.reglages.cats.length;q++){ if(S.reglages.cats[q].id === id3) S.reglages.cats[q].seuilMin = -Math.abs(v3); } }
+    }
+    var smax = document.querySelectorAll('[data-seuilmax]');
+    for(j=0;j<smax.length;j++){
+      var id4 = smax[j].getAttribute('data-seuilmax'), v4 = parseFloat(smax[j].value.replace(',','.'));
+      if(!isNaN(v4)){ for(q=0;q<S.reglages.cats.length;q++){ if(S.reglages.cats[q].id === id4) S.reglages.cats[q].seuilMax = Math.abs(v4); } }
+    }
+    sauver(); rendre(); toast('Enregistré');
+    dessinerReglagesPrincipal();
+  });
 }
 
 function exporter(){
