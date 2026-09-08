@@ -312,6 +312,9 @@ function charger(){
   try { brut = localStorage.getItem(CLE); } catch(e){}
   if(brut){ try { S = JSON.parse(brut); } catch(e){ S = null; } }
   if(!S) S = { version:2, reglages:{plafond:600, retraite:745, cats:CATS_DEF}, notes:[], repli:true, mois:{} };
+  normaliser();
+}
+function normaliser(){
   if(!S.reglages) S.reglages = {plafond:600, retraite:745, cats:CATS_DEF};
   if(!S.reglages.cats || S.reglages.cats.length !== CATS_DEF.length) S.reglages.cats = CATS_DEF;
   fusionnerSeuils();
@@ -1262,7 +1265,9 @@ function importer(){
       try {
         var d = JSON.parse(r.result);
         if(!d.mois) throw new Error('format');
-        S = d; charger(); sauver(); fermerEtRevenir();
+        S = d;
+        normaliser();
+        sauver(); fermerEtRevenir();
         moisCourant = moisComptable(new Date());
         if(!S.mois[moisCourant]) moisCourant = dernierK();
         rendre(); toast('Sauvegarde restaurée');
