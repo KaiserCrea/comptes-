@@ -290,6 +290,7 @@ function moisDeDate(str){
   var p = str.split('-');
   return moisComptable(new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10)));
 }
+function accordLigne(n){ return n + (n>1 ? ' lignes' : ' ligne'); }
 function eur(n,dec){
   var v = Math.abs(n).toLocaleString('fr-FR',{minimumFractionDigits:dec===0?0:2, maximumFractionDigits:dec===0?0:2});
   return (n<0?'−':'')+v+' €';
@@ -681,7 +682,7 @@ function rendreBilan(){
   if(an.length){
     h += '<div class="sstitre" style="margin-top:18px">historique</div><div class="carte pad courbewrap" id="courbewrap"></div>';
   }
-  h += '<div class="pied"><span>'+libMois(k)+'</span><span>'+m.lignes.length+' lignes</span></div>';
+  h += '<div class="pied"><span>'+libMois(k)+'</span><span>'+accordLigne(m.lignes.length)+'</span></div>';
   document.getElementById('s-bilan').innerHTML = h;
   if(an.length) dessinerCourbe();
 }
@@ -699,7 +700,7 @@ function pointsCourbe(){
     var kk = l[i];
     if(!S.mois[kk].clos) continue;
     if(courbeVue === 'annee' && kk.indexOf(anneeCourbe+'-') !== 0) continue;
-    pts.push({ k:kk, e: bilanMois(kk).ecart });
+    pts.push({ k:kk, e: solde(kk) });
   }
   return pts;
 }
@@ -820,7 +821,7 @@ function ouvrirDetail(k){
      + '<div class="rang"><span>Passifs</span><b>'+eur(b.passifs,0)+'</b></div>'
      + '<div class="rang"><span>Retraite</span><b style="color:var(--vert)">'+eur(Number(S.mois[k].retraite)||0,0)+'</b></div>'
      + '<div class="rang"><span style="color:var(--brun)">Reporté du mois passé</span><b style="color:var(--brun)">'+eur(b.report,0)+'</b></div></div>';
-  h += '<div class="pied"><span>'+S.mois[k].lignes.length+' lignes</span><span>mois clôturé</span></div>';
+  h += '<div class="pied"><span>'+accordLigne(S.mois[k].lignes.length)+'</span><span>mois clôturé</span></div>';
   document.getElementById('tiroir').innerHTML = h;
 }
 
