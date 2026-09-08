@@ -1,4 +1,4 @@
-var CACHE = 'comptes-v7';
+var CACHE = 'comptes-v8';
 var FICHIERS = ['./', './index.html', './manifest.webmanifest'];
 
 self.addEventListener('install', function(e){
