@@ -1,4 +1,4 @@
-var CACHE = 'comptes-v10';
+var CACHE = 'comptes-v12';
 var FICHIERS = ['./', './index.html', './manifest.webmanifest'];
 
 self.addEventListener('install', function(e){

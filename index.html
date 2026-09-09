@@ -91,7 +91,7 @@ section.on{display:block}
 .courbetabs .fan:disabled{color:var(--or-sombre);opacity:.35;cursor:default}
 .courbetabs .an{font-size:12px;color:var(--sable);min-width:34px;text-align:center}
 .courbesvg{width:100%;display:block;touch-action:pan-y}
-.pointclic{cursor:pointer}
+.pointclic{cursor:pointer;pointer-events:all}
 .boutonclos{display:block;width:100%;margin:26px 0 0;border:.5px solid var(--or);background:none;border-radius:22px;padding:12px;font-size:13px;color:var(--or);letter-spacing:.5px;cursor:pointer}
 
 .notes{margin-top:26px}
@@ -124,9 +124,10 @@ section.on{display:block}
 .piste i{display:block;height:100%;border-radius:1px}
 .piste i.depasse{background:var(--rouge)!important}
 .piste i.depassebien{background:var(--vert)!important}
-.repere{position:absolute;top:-3px;width:1px;height:8px;background:var(--or);opacity:.8}
 .pistebi{position:relative;height:2px;background:var(--trait);border-radius:1px;margin-top:2px}
-.pistebi .axe{position:absolute;left:50%;top:-3px;width:1px;height:8px;background:var(--or-sombre)}
+.repere{position:absolute;top:-3px;width:1px;height:8px;background:var(--or-sombre);opacity:.6;transition:background .2s}
+.repere.actif{background:#EF9F27;opacity:1;width:1.4px}
+.pistebi .axe{position:absolute;top:-3px;width:1px;height:8px;background:var(--or-sombre)}
 .pistebi .segb{position:absolute;top:0;height:100%;border-radius:1px}
 .pad{padding:15px 15px 4px}
 .rang{display:flex;justify-content:space-between;align-items:baseline;padding:12px 15px;border-bottom:.5px solid var(--trait)}
@@ -589,13 +590,15 @@ function ecartAnnee(an){
   }
   return t;
 }
+var ALERTE_RATIO = 0.8;
 function barreSeuil(v, seuil, couleur, bon){
   if(!seuil || seuil <= 0){
     return '<div class="piste"><i style="width:0%;background:'+couleur+'"></i></div>';
   }
   var pct = Math.min(100, Math.round(v/seuil*100));
+  var alerte = v >= seuil*ALERTE_RATIO;
   var h = '<div class="piste"><i style="width:'+pct+'%;background:'+couleur+'"></i>';
-  h += '<span class="repere" style="left:calc(100% - 1px)"></span>';
+  h += '<span class="repere'+(alerte?' actif':'')+'" style="left:'+(ALERTE_RATIO*100)+'%"></span>';
   if(v > seuil){
     var d = Math.min(30, Math.round((v-seuil)/seuil*100));
     h += '<i class="'+(bon?'depassebien':'depasse')+'" style="position:absolute;left:100%;width:'+d+'%;height:100%;border-radius:1px"></i>';
@@ -616,7 +619,7 @@ function barreBipolaire(net, min, max, couleur){
   coul = horsBornes ? (net > max ? 'var(--vert)' : 'var(--rouge)') : couleur;
   var h = '<div class="pistebi">';
   h += '<div class="segb" style="left:'+gauche+'%;width:'+Math.max(0,larg)+'%;background:'+coul+'"></div>';
-  h += '<span class="axe"></span>';
+  h += '<span class="axe" style="left:'+zero+'%"></span>';
   h += '</div>';
   return h;
 }
@@ -783,7 +786,7 @@ function dessinerCourbe(){
     if(montrerMois || i2===0 || i2===n-1){
       svgc += '<text x="'+xx.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--brun)">'+MOISCOURT[parseInt(pts[i2].k.split('-')[1],10)-1]+'</text>';
     }
-    svgc += '<circle class="pointclic" data-detail="'+pts[i2].k+'" cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="10" fill="transparent"/>';
+    svgc += '<circle class="pointclic" data-detail="'+pts[i2].k+'" cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="13" fill="transparent" pointer-events="all"/>';
     svgc += '<circle cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="3" fill="'+(bon?'#C0DD97':'#F0997B')+'" stroke="var(--noir)" stroke-width="1"/>';
   }
   svgc += '</svg>';
