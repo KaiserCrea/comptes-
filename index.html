@@ -704,6 +704,16 @@ function pointsCourbe(){
   }
   return pts;
 }
+function palierRond(v){
+  var base = [1,2,2.5,5];
+  var p = Math.pow(10, Math.floor(Math.log(v)/Math.LN10));
+  var i;
+  for(i=0;i<base.length;i++){
+    var candidat = base[i]*p;
+    if(v <= candidat*4) return candidat;
+  }
+  return 10*p;
+}
 function cheminLisse(pts, X, Y){
   var n = pts.length, d = '', i;
   if(n < 2) return '';
@@ -741,29 +751,37 @@ function dessinerCourbe(){
     brancherCourbeTabs(wrap);
     return;
   }
-  var W = 320, H = 190, padX = 20, padY = 30;
+  var W = 320, H = 190, padY = 20;
   var maxE = 0, i;
   for(i=0;i<pts.length;i++){ if(Math.abs(pts[i].e) > maxE) maxE = Math.abs(pts[i].e); }
-  maxE = Math.max(maxE, 50) * 1.35;
+  maxE = Math.max(maxE, 50);
+  var pal = palierRond(maxE);
+  var plafondEch = Math.ceil((maxE*1.15)/pal)*pal;
+  var padGauche = 46, padDroite = 12;
   var n = pts.length;
-  function X(i2){ return padX + (n===1?(W-padX*2)/2:(i2/(n-1))*(W-padX*2)); }
-  function Y(v){ return H/2 - (v/maxE)*(H/2-padY); }
+  function X(i2){ return padGauche + (n===1?(W-padGauche-padDroite)/2:(i2/(n-1))*(W-padGauche-padDroite)); }
+  function Y(v){ return H/2 - (v/plafondEch)*(H/2-padY); }
 
   var d = cheminLisse(pts, X, Y);
-  var zoneHaut = 'M'+padX+','+(H/2)+' L'+padX+','+padY+' L'+(W-padX)+','+padY+' L'+(W-padX)+','+(H/2)+' Z';
-  var zoneBas  = 'M'+padX+','+(H/2)+' L'+padX+','+(H-padY)+' L'+(W-padX)+','+(H-padY)+' L'+(W-padX)+','+(H/2)+' Z';
+  var zoneHaut = 'M'+padGauche+','+(H/2)+' L'+padGauche+','+padY+' L'+(W-padDroite)+','+padY+' L'+(W-padDroite)+','+(H/2)+' Z';
+  var zoneBas  = 'M'+padGauche+','+(H/2)+' L'+padGauche+','+(H-padY)+' L'+(W-padDroite)+','+(H-padY)+' L'+(W-padDroite)+','+(H/2)+' Z';
   var svgc = '<svg class="courbesvg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">'
     + '<path d="'+zoneHaut+'" fill="var(--vert)" opacity="0.06"/>'
-    + '<path d="'+zoneBas+'" fill="var(--rouge)" opacity="0.06"/>'
-    + '<line x1="'+padX+'" y1="'+(H/2)+'" x2="'+(W-padX)+'" y2="'+(H/2)+'" stroke="var(--or-sombre)" stroke-width="1" stroke-dasharray="3,3"/>'
-    + '<path d="'+d+'" fill="none" stroke="var(--or)" stroke-width="2"/>';
+    + '<path d="'+zoneBas+'" fill="var(--rouge)" opacity="0.06"/>';
+  var paliers = [], pv;
+  for(pv=0; pv<=plafondEch; pv+=pal){ paliers.push(pv); if(pv>0) paliers.push(-pv); }
+  var pj;
+  for(pj=0;pj<paliers.length;pj++){
+    var pyv = paliers[pj], py = Y(pyv);
+    svgc += '<line x1="'+padGauche+'" y1="'+py.toFixed(1)+'" x2="'+(W-padDroite)+'" y2="'+py.toFixed(1)+'" stroke="var(--or-sombre)" stroke-width="1" '+(pyv===0?'':'stroke-dasharray="2,4" opacity="0.35"')+'/>';
+    svgc += '<text x="'+(padGauche-8)+'" y="'+(py+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--brun)">'+(pyv===0?'0':eur(pyv,0))+'</text>';
+  }
+  svgc += '<path d="'+d+'" fill="none" stroke="var(--or)" stroke-width="2"/>';
   var i2, montrerMois = (n <= 12);
   for(i2=0;i2<n;i2++){
     var xx = X(i2), yy = Y(pts[i2].e), bon = pts[i2].e >= 0;
-    var yLab = bon ? yy - 11 : yy + 17;
-    svgc += '<text x="'+xx.toFixed(1)+'" y="'+yLab.toFixed(1)+'" text-anchor="middle" font-size="9.5" fill="'+(bon?'#C0DD97':'#F0997B')+'" font-family="var(--serif)">'+signe(pts[i2].e,0)+'</text>';
     if(montrerMois || i2===0 || i2===n-1){
-      svgc += '<text x="'+xx.toFixed(1)+'" y="'+(H-10)+'" text-anchor="middle" font-size="9" fill="var(--brun)">'+MOISCOURT[parseInt(pts[i2].k.split('-')[1],10)-1]+'</text>';
+      svgc += '<text x="'+xx.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--brun)">'+MOISCOURT[parseInt(pts[i2].k.split('-')[1],10)-1]+'</text>';
     }
     svgc += '<circle class="pointclic" data-detail="'+pts[i2].k+'" cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="10" fill="transparent"/>';
     svgc += '<circle cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="3" fill="'+(bon?'#C0DD97':'#F0997B')+'" stroke="var(--noir)" stroke-width="1"/>';
