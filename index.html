@@ -127,7 +127,7 @@ section.on{display:block}
 .pistebi{position:relative;height:2px;background:var(--trait);border-radius:1px;margin-top:2px}
 .repere{position:absolute;top:-3px;width:1px;height:8px;background:var(--or-sombre);opacity:.6;transition:background .2s}
 .repere.actif{background:#EF9F27;opacity:1;width:1.4px}
-.pistebi .axe{position:absolute;top:-3px;width:1px;height:8px;background:var(--or-sombre)}
+.pistebi .axe{position:absolute;top:-4px;width:2px;height:10px;background:var(--or);opacity:.9;border-radius:1px}
 .pistebi .segb{position:absolute;top:0;height:100%;border-radius:1px}
 .pad{padding:15px 15px 4px}
 .rang{display:flex;justify-content:space-between;align-items:baseline;padding:12px 15px;border-bottom:.5px solid var(--trait)}
@@ -597,7 +597,8 @@ function barreSeuil(v, seuil, couleur, bon){
   }
   var pct = Math.min(100, Math.round(v/seuil*100));
   var alerte = v >= seuil*ALERTE_RATIO;
-  var h = '<div class="piste"><i style="width:'+pct+'%;background:'+couleur+'"></i>';
+  var teinte = alerte ? '#EF9F27' : couleur;
+  var h = '<div class="piste"><i style="width:'+pct+'%;background:'+teinte+';transition:background .25s"></i>';
   h += '<span class="repere'+(alerte?' actif':'')+'" style="left:'+(ALERTE_RATIO*100)+'%"></span>';
   if(v > seuil){
     var d = Math.min(30, Math.round((v-seuil)/seuil*100));
@@ -786,14 +787,12 @@ function dessinerCourbe(){
     if(montrerMois || i2===0 || i2===n-1){
       svgc += '<text x="'+xx.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--brun)">'+MOISCOURT[parseInt(pts[i2].k.split('-')[1],10)-1]+'</text>';
     }
-    svgc += '<circle class="pointclic" data-detail="'+pts[i2].k+'" cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="13" fill="transparent" pointer-events="all"/>';
+    svgc += '<circle class="pointclic" data-detail="'+pts[i2].k+'" cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="13" fill="#000000" fill-opacity="0.01" pointer-events="all"/>';
     svgc += '<circle cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="3" fill="'+(bon?'#C0DD97':'#F0997B')+'" stroke="var(--noir)" stroke-width="1"/>';
   }
   svgc += '</svg>';
   wrap.innerHTML = h + svgc;
   brancherCourbeTabs(wrap);
-  var pts2 = wrap.querySelectorAll('[data-detail]'), kk2;
-  for(kk2=0;kk2<pts2.length;kk2++){ pts2[kk2].addEventListener('click', function(){ ouvrirDetail(this.getAttribute('data-detail')); }); }
 }
 function brancherCourbeTabs(wrap){
   var btns = wrap.querySelectorAll('[data-cv]'), jj;
@@ -1374,6 +1373,7 @@ function init(){
     if((el = e.target.closest('[data-supnote]'))){ supprimerNote(el.getAttribute('data-supnote')); return; }
     if((el = e.target.closest('[data-note]'))){ basculerNote(el.getAttribute('data-note')); return; }
     if((el = e.target.closest('[data-annee]'))){ ouvrirAnnee(el.getAttribute('data-annee')); return; }
+    if((el = e.target.closest('[data-detail]'))){ ouvrirDetail(el.getAttribute('data-detail')); return; }
   });
   document.getElementById('tiroir').addEventListener('click', function(e){
     if(!e.target.closest) return;
