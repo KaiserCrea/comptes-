@@ -92,6 +92,7 @@ section.on{display:block}
 .courbetabs .an{font-size:12px;color:var(--sable);min-width:34px;text-align:center}
 .courbesvg{width:100%;display:block;touch-action:pan-y}
 .pointclic{cursor:pointer;pointer-events:all}
+.zonepoint{position:absolute;width:30px;height:30px;margin-left:-15px;margin-top:-15px;background:none;border:none;padding:0;cursor:pointer;-webkit-tap-highlight-color:rgba(184,147,78,.25)}
 .boutonclos{display:block;width:100%;margin:26px 0 0;border:.5px solid var(--or);background:none;border-radius:22px;padding:12px;font-size:13px;color:var(--or);letter-spacing:.5px;cursor:pointer}
 
 .notes{margin-top:26px}
@@ -595,11 +596,16 @@ function barreSeuil(v, seuil, couleur, bon){
   if(!seuil || seuil <= 0){
     return '<div class="piste"><i style="width:0%;background:'+couleur+'"></i></div>';
   }
+  var seuilAlerte = seuil*ALERTE_RATIO;
   var pct = Math.min(100, Math.round(v/seuil*100));
-  var alerte = v >= seuil*ALERTE_RATIO;
-  var teinte = alerte ? '#EF9F27' : couleur;
-  var h = '<div class="piste"><i style="width:'+pct+'%;background:'+teinte+';transition:background .25s"></i>';
-  h += '<span class="repere'+(alerte?' actif':'')+'" style="left:'+(ALERTE_RATIO*100)+'%"></span>';
+  var pctAlerte = ALERTE_RATIO*100;
+  var alerte = v >= seuilAlerte;
+  var h = '<div class="piste">';
+  h += '<i style="width:'+Math.min(pct,pctAlerte)+'%;background:'+couleur+'"></i>';
+  if(alerte){
+    h += '<i style="position:absolute;left:'+pctAlerte+'%;width:'+(pct-pctAlerte)+'%;height:100%;background:#EF9F27;border-radius:0 1px 1px 0"></i>';
+  }
+  h += '<span class="repere'+(alerte?' actif':'')+'" style="left:'+pctAlerte+'%"></span>';
   if(v > seuil){
     var d = Math.min(30, Math.round((v-seuil)/seuil*100));
     h += '<i class="'+(bon?'depassebien':'depasse')+'" style="position:absolute;left:100%;width:'+d+'%;height:100%;border-radius:1px"></i>';
@@ -787,11 +793,15 @@ function dessinerCourbe(){
     if(montrerMois || i2===0 || i2===n-1){
       svgc += '<text x="'+xx.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--brun)">'+MOISCOURT[parseInt(pts[i2].k.split('-')[1],10)-1]+'</text>';
     }
-    svgc += '<circle class="pointclic" data-detail="'+pts[i2].k+'" cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="13" fill="#000000" fill-opacity="0.01" pointer-events="all"/>';
     svgc += '<circle cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="3" fill="'+(bon?'#C0DD97':'#F0997B')+'" stroke="var(--noir)" stroke-width="1"/>';
   }
   svgc += '</svg>';
-  wrap.innerHTML = h + svgc;
+  var zones = '';
+  for(i2=0;i2<n;i2++){
+    var lx = (X(i2)/W*100).toFixed(2), ly = (Y(pts[i2].e)/H*100).toFixed(2);
+    zones += '<button type="button" class="zonepoint" data-detail="'+pts[i2].k+'" aria-label="'+libMois(pts[i2].k)+'" style="left:'+lx+'%;top:'+ly+'%"></button>';
+  }
+  wrap.innerHTML = h + svgc + zones;
   brancherCourbeTabs(wrap);
 }
 function brancherCourbeTabs(wrap){
