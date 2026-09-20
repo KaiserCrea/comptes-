@@ -89,6 +89,10 @@ section.on{display:block}
 .courbetabs button.on{border-color:var(--or);color:var(--sable);background:var(--carte2)}
 .courbetabs .fan{background:none;border:none;color:var(--or);line-height:0;padding:5px;cursor:pointer}
 .courbetabs .fan:disabled{color:var(--or-sombre);opacity:.35;cursor:default}
+.pagination{display:flex;align-items:center;justify-content:center;gap:14px;padding:12px 0 2px}
+.pagination button{background:none;border:none;color:var(--or);line-height:0;padding:6px;cursor:pointer}
+.pagination button:disabled{color:var(--or-sombre);opacity:.35;cursor:default}
+.pagination span{font-size:12px;color:var(--sable);min-width:74px;text-align:center}
 .courbetabs .an{font-size:12px;color:var(--sable);min-width:34px;text-align:center}
 .courbesvg{width:100%;display:block;touch-action:pan-y}
 .pointclic{cursor:pointer}
@@ -276,6 +280,8 @@ var CLE = 'comptes-v1';
 var JOURCLOTURE = 27;
 
 var S = null, moisCourant = null, onglet = 'mois', tiroirOuvert = false, edition = null;
+var pageMois = 0, dernierMoisAffiche = null;
+var LIGNES_PAR_PAGE = 30;
 var anneeVue = 0, quitArme = false;
 
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
@@ -479,16 +485,22 @@ function rendreMois(){
     h += '<div class="carte2 rav" id="ravplein"><span>Reste à vivre du mois</span>'
        + '<b class="num">'+eur(soldeDepart(moisCourant),0)+'</b></div>';
   }
+  if(moisCourant !== dernierMoisAffiche){ pageMois = 0; dernierMoisAffiche = moisCourant; }
   var l = m.lignes.slice().sort(function(a,b){
     if(a.date === b.date) return (b.ordre||0)-(a.ordre||0);
     return a.date < b.date ? 1 : -1;
   });
+  var nbPages = Math.max(1, Math.ceil(l.length/LIGNES_PAR_PAGE));
+  if(pageMois >= nbPages) pageMois = nbPages-1;
+  if(pageMois < 0) pageMois = 0;
+  var debutPage = pageMois*LIGNES_PAR_PAGE;
+  var lPage = l.slice(debutPage, debutPage+LIGNES_PAR_PAGE);
   h += '<div class="carte">';
   if(!l.length){
     h += '<div class="vide">Rien pour ce mois.<br>Appuie sur Ajouter pour la première ligne.</div>';
   } else {
-    for(i=0;i<l.length;i++){
-      var x = l[i], c = cat(x.cat), p = x.date.split('-');
+    for(i=0;i<lPage.length;i++){
+      var x = lPage[i], c = cat(x.cat), p = x.date.split('-');
       h += '<div class="ligne'+(x.valide?' valide':'')+'">'
          + '<button class="coche" data-coche="'+x.id+'">'+svg(x.valide?'coche':'case',18)+'</button>'
          + '<span class="ico">'+svg(c.ico,19,c.couleur)+'</span>'
@@ -499,6 +511,13 @@ function rendreMois(){
     }
   }
   h += '</div>';
+  if(nbPages > 1){
+    h += '<div class="pagination">'
+       + '<button id="page-moins" '+(pageMois<=0?'disabled':'')+' aria-label="Page précédente">'+svg('gauche',18)+'</button>'
+       + '<span>page '+(pageMois+1)+' / '+nbPages+'</span>'
+       + '<button id="page-plus" '+(pageMois>=nbPages-1?'disabled':'')+' aria-label="Page suivante">'+svg('droite',18)+'</button>'
+       + '</div>';
+  }
 
   if(!m.clos && moisCourant === moisComptable(new Date())){
     h += '<button class="boutonclos" id="cloturer">Clôturer '+libMois(moisCourant).split(' ')[0]+'</button>';
@@ -508,6 +527,10 @@ function rendreMois(){
 
   var c2 = document.getElementById('cloturer');
   if(c2) c2.addEventListener('click', demanderCloture);
+  var pm = document.getElementById('page-moins');
+  if(pm) pm.addEventListener('click', function(){ pageMois--; rendreMois(); document.getElementById('main').scrollTop = 0; });
+  var pp = document.getElementById('page-plus');
+  if(pp) pp.addEventListener('click', function(){ pageMois++; rendreMois(); document.getElementById('main').scrollTop = 0; });
   var rm = document.getElementById('ravmini');
   if(rm) rm.addEventListener('click', function(){ S.ravOuvert = true; sauver(); rendreMois(); });
   var rp = document.getElementById('ravplein');
@@ -1091,6 +1114,7 @@ function enregistrerLigne(){
     var cible = S.mois[kd] ? kd : dernierK();
     S.mois[cible].lignes.push({id:uid(), date:date, libelle:lib, montant:montant, cat:t.dataset.cat, valide:false, ordre:Date.now()});
     if(cible !== moisCourant){ moisCourant = cible; toast('Ligne rangée dans '+libMois(cible)); }
+    pageMois = 0;
   }
   sauver(); rendre(); toast('Enregistré');
   if(!edition){
