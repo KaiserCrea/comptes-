@@ -721,25 +721,13 @@ function bornesAnnees(){
   var mini = Math.min.apply(null, an.map(Number)), maxi = Math.max.apply(null, an.map(Number));
   return {mini:mini, maxi:maxi};
 }
-function pointsCandles(){
+function pointsCourbe(){
   var l = moisExistants(), pts = [], i;
   for(i=0;i<l.length;i++){
     var kk = l[i];
     if(!S.mois[kk].clos) continue;
     if(courbeVue === 'annee' && kk.indexOf(anneeCourbe+'-') !== 0) continue;
-    var m = S.mois[kk];
-    var open = soldeDepart(kk);
-    var chrono = m.lignes.slice().sort(function(a,b){
-      if(a.date === b.date) return (a.ordre||0)-(b.ordre||0);
-      return a.date < b.date ? -1 : 1;
-    });
-    var running = open, high = open, low = open, j;
-    for(j=0;j<chrono.length;j++){
-      running += Number(chrono[j].montant)||0;
-      if(running > high) high = running;
-      if(running < low) low = running;
-    }
-    pts.push({ k:kk, open:open, close:running, high:high, low:low });
+    pts.push({ k:kk, e: solde(kk) });
   }
   return pts;
 }
@@ -752,6 +740,20 @@ function palierRond(v){
     if(v <= candidat*4) return candidat;
   }
   return 10*p;
+}
+function cheminLisse(pts, X, Y){
+  var n = pts.length, d = '', i;
+  if(n < 2) return '';
+  var P = [];
+  for(i=0;i<n;i++) P.push([X(i), Y(pts[i].e)]);
+  d = 'M'+P[0][0].toFixed(1)+','+P[0][1].toFixed(1);
+  for(i=0;i<n-1;i++){
+    var p0 = P[i-1] || P[i], p1 = P[i], p2 = P[i+1], p3 = P[i+2] || p2;
+    var c1x = p1[0] + (p2[0]-p0[0])/6, c1y = p1[1] + (p2[1]-p0[1])/6;
+    var c2x = p2[0] - (p3[0]-p1[0])/6, c2y = p2[1] - (p3[1]-p1[1])/6;
+    d += ' C'+c1x.toFixed(1)+','+c1y.toFixed(1)+' '+c2x.toFixed(1)+','+c2y.toFixed(1)+' '+p2[0].toFixed(1)+','+p2[1].toFixed(1);
+  }
+  return d;
 }
 function dessinerCourbe(){
   var wrap = document.getElementById('courbewrap');
@@ -769,8 +771,8 @@ function dessinerCourbe(){
      + '</div>';
   h += '<button data-cv="tout" class="'+(courbeVue==='tout'?'on':'')+'">Tout</button></div>';
 
-  var pts = pointsCandles();
-  if(pts.length < 1){
+  var pts = pointsCourbe();
+  if(pts.length < 2){
     h += '<div class="vide" style="padding:18px 4px">Pas encore assez de mois clôturés.</div>';
     wrap.innerHTML = h;
     brancherCourbeTabs(wrap);
@@ -778,10 +780,7 @@ function dessinerCourbe(){
   }
   var W = 320, H = 190, padY = 20;
   var maxE = 0, i;
-  for(i=0;i<pts.length;i++){
-    if(Math.abs(pts[i].high) > maxE) maxE = Math.abs(pts[i].high);
-    if(Math.abs(pts[i].low) > maxE) maxE = Math.abs(pts[i].low);
-  }
+  for(i=0;i<pts.length;i++){ if(Math.abs(pts[i].e) > maxE) maxE = Math.abs(pts[i].e); }
   maxE = Math.max(maxE, 50);
   var pal = palierRond(maxE);
   var plafondEch = Math.ceil((maxE*1.15)/pal)*pal;
@@ -790,6 +789,7 @@ function dessinerCourbe(){
   function X(i2){ return padGauche + (n===1?(W-padGauche-padDroite)/2:(i2/(n-1))*(W-padGauche-padDroite)); }
   function Y(v){ return H/2 - (v/plafondEch)*(H/2-padY); }
 
+  var d = cheminLisse(pts, X, Y);
   var zoneHaut = 'M'+padGauche+','+(H/2)+' L'+padGauche+','+padY+' L'+(W-padDroite)+','+padY+' L'+(W-padDroite)+','+(H/2)+' Z';
   var zoneBas  = 'M'+padGauche+','+(H/2)+' L'+padGauche+','+(H-padY)+' L'+(W-padDroite)+','+(H-padY)+' L'+(W-padDroite)+','+(H/2)+' Z';
   var svgc = '<svg class="courbesvg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">'
@@ -803,21 +803,14 @@ function dessinerCourbe(){
     svgc += '<line x1="'+padGauche+'" y1="'+py.toFixed(1)+'" x2="'+(W-padDroite)+'" y2="'+py.toFixed(1)+'" stroke="var(--or-sombre)" stroke-width="1" '+(pyv===0?'':'stroke-dasharray="2,4" opacity="0.35"')+'/>';
     svgc += '<text x="'+(padGauche-8)+'" y="'+(py+3).toFixed(1)+'" text-anchor="end" font-size="9" fill="var(--brun)">'+(pyv===0?'0':eur(pyv,0))+'</text>';
   }
-
-  var largeurDispo = n>1 ? (W-padGauche-padDroite)/(n-1) : 40;
-  var largeurBougie = Math.max(4, Math.min(16, largeurDispo*0.55));
+  svgc += '<path d="'+d+'" fill="none" stroke="var(--or)" stroke-width="2"/>';
   var i2, montrerMois = (n <= 12);
   for(i2=0;i2<n;i2++){
-    var pt = pts[i2], xx = X(i2), bon = pt.close >= pt.open;
-    var couleur = bon ? '#C0DD97' : '#F0997B';
-    var yHaut = Y(pt.high), yBas = Y(pt.low);
-    var yCorpsHaut = Y(Math.max(pt.open,pt.close)), yCorpsBas = Y(Math.min(pt.open,pt.close));
-    var hCorps = Math.max(1.5, yCorpsBas-yCorpsHaut);
-    svgc += '<line x1="'+xx.toFixed(1)+'" y1="'+yHaut.toFixed(1)+'" x2="'+xx.toFixed(1)+'" y2="'+yBas.toFixed(1)+'" stroke="'+couleur+'" stroke-width="1.2"/>';
-    svgc += '<rect x="'+(xx-largeurBougie/2).toFixed(1)+'" y="'+yCorpsHaut.toFixed(1)+'" width="'+largeurBougie.toFixed(1)+'" height="'+hCorps.toFixed(1)+'" fill="'+couleur+'" rx="1"/>';
+    var xx = X(i2), yy = Y(pts[i2].e), bon = pts[i2].e >= 0;
     if(montrerMois || i2===0 || i2===n-1){
-      svgc += '<text x="'+xx.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--brun)">'+MOISCOURT[parseInt(pt.k.split('-')[1],10)-1]+'</text>';
+      svgc += '<text x="'+xx.toFixed(1)+'" y="'+(H-6)+'" text-anchor="middle" font-size="9" fill="var(--brun)">'+MOISCOURT[parseInt(pts[i2].k.split('-')[1],10)-1]+'</text>';
     }
+    svgc += '<circle cx="'+xx.toFixed(1)+'" cy="'+yy.toFixed(1)+'" r="3" fill="'+(bon?'#C0DD97':'#F0997B')+'" stroke="var(--noir)" stroke-width="1"/>';
   }
   svgc += '</svg>';
   wrap.innerHTML = h + svgc;
