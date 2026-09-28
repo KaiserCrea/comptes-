@@ -323,7 +323,7 @@ function charger(){
   var brut = null;
   try { brut = localStorage.getItem(CLE); } catch(e){}
   if(brut){ try { S = JSON.parse(brut); } catch(e){ S = null; } }
-  if(!S) S = { version:2, reglages:{plafond:600, retraite:745, cats:CATS_DEF}, notes:[], repli:true, mois:{} };
+  if(!S) S = { version:3, reglages:{plafond:600, retraite:745, cats:CATS_DEF}, notes:[], repli:true, mois:{} };
   normaliser();
 }
 function normaliser(){
@@ -350,26 +350,41 @@ function fusionnerSeuils(){
   }
 }
 function migrer(){
-  if(S.version === 2) return;
-  var cible = moisComptable(new Date()), k, i;
-  var liste = moisExistants();
-  for(i=0;i<liste.length;i++){
-    k = liste[i];
-    var m = S.mois[k];
-    if(k > cible && (!m.lignes || !m.lignes.length)) delete S.mois[k];
-  }
-  liste = moisExistants();
-  var prec = null;
-  for(i=0;i<liste.length;i++){
-    k = liste[i];
-    if(S.mois[k].report === undefined){
-      S.mois[k].report = (prec === null) ? (Number(S.reglages.reportInitial)||0) : solde(prec);
+  if(!S.version || S.version < 2){
+    var cible = moisComptable(new Date()), k, i;
+    var liste = moisExistants();
+    for(i=0;i<liste.length;i++){
+      k = liste[i];
+      var m = S.mois[k];
+      if(k > cible && (!m.lignes || !m.lignes.length)) delete S.mois[k];
     }
-    S.mois[k].clos = (k < cible);
-    prec = k;
+    liste = moisExistants();
+    var prec = null;
+    for(i=0;i<liste.length;i++){
+      k = liste[i];
+      if(S.mois[k].report === undefined){
+        S.mois[k].report = (prec === null) ? (Number(S.reglages.reportInitial)||0) : solde(prec);
+      }
+      S.mois[k].clos = (k < cible);
+      prec = k;
+    }
+    delete S.reglages.reportInitial;
+    S.version = 2;
   }
-  delete S.reglages.reportInitial;
-  S.version = 2;
+  if(S.version < 3){
+    resynchroniserReports();
+    S.version = 3;
+  }
+}
+function resynchroniserReports(){
+  var liste = moisExistants(), i;
+  for(i=1;i<liste.length;i++){
+    var attendu = solde(liste[i-1]);
+    var mm = S.mois[liste[i]];
+    if(Math.abs((Number(mm.report)||0) - attendu) > 0.005){
+      mm.report = Math.round(attendu*100)/100;
+    }
+  }
 }
 function sauver(){
   try { localStorage.setItem(CLE, JSON.stringify(S)); }
@@ -429,6 +444,17 @@ function soldeDepart(k){
   return (Number(m.report)||0) + (Number(m.retraite)||0) - totalPassifs(k);
 }
 function solde(k){ return S.mois[k] ? soldeDepart(k) + sommeLignes(k) : 0; }
+function propagerDepuis(k, avant){
+  var delta = solde(k) - avant;
+  if(Math.abs(delta) < 0.005) return;
+  var liste = moisExistants(), i;
+  for(i=0;i<liste.length;i++){
+    if(liste[i] > k){
+      var mm = S.mois[liste[i]];
+      mm.report = Math.round(((Number(mm.report)||0) + delta)*100)/100;
+    }
+  }
+}
 
 function rendreEntete(){
   var m = S.mois[moisCourant];
@@ -1103,16 +1129,20 @@ function enregistrerLigne(){
   var m = S.mois[moisCourant], i;
 
   if(edition){
+    var avantEdit = solde(moisCourant);
     for(i=0;i<m.lignes.length;i++){
       if(m.lignes[i].id === edition){
         m.lignes[i].montant = montant; m.lignes[i].libelle = lib;
         m.lignes[i].cat = t.dataset.cat; m.lignes[i].date = date;
       }
     }
+    propagerDepuis(moisCourant, avantEdit);
   } else {
     var kd = moisDeDate(date);
     var cible = S.mois[kd] ? kd : dernierK();
+    var avantAjout = solde(cible);
     S.mois[cible].lignes.push({id:uid(), date:date, libelle:lib, montant:montant, cat:t.dataset.cat, valide:false, ordre:Date.now()});
+    propagerDepuis(cible, avantAjout);
     if(cible !== moisCourant){ moisCourant = cible; toast('Ligne rangée dans '+libMois(cible)); }
     pageMois = 0;
   }
@@ -1125,8 +1155,10 @@ function enregistrerLigne(){
 }
 function supprimerLigne(){
   var m = S.mois[moisCourant], garde = [], i;
+  var avantSuppr = solde(moisCourant);
   for(i=0;i<m.lignes.length;i++){ if(m.lignes[i].id !== edition) garde.push(m.lignes[i]); }
   m.lignes = garde;
+  propagerDepuis(moisCourant, avantSuppr);
   sauver(); fermerEtRevenir(); rendre();
 }
 
@@ -1194,9 +1226,11 @@ function ouvrirPassif(id){
     var v = parseFloat(document.getElementById('p-montant').value.replace(',','.'));
     if(!nom || isNaN(v)){ document.getElementById('p-nom').style.borderColor = 'var(--alerte)'; return; }
     var mm = S.mois[moisCourant], j;
+    var avantPassif = solde(moisCourant);
     if(edition){
       for(j=0;j<mm.passifs.length;j++){ if(mm.passifs[j].id === edition){ mm.passifs[j].nom = nom; mm.passifs[j].montant = v; } }
     } else { mm.passifs.push({id:uid(), nom:nom, montant:v, passe:false}); }
+    propagerDepuis(moisCourant, avantPassif);
     sauver(); rendre(); toast('Enregistré');
     if(!edition){
       document.getElementById('p-nom').value = '';
@@ -1211,8 +1245,11 @@ function ouvrirPassif(id){
   var sp = document.getElementById('p-suppr');
   if(sp) sp.addEventListener('click', function(){
     var mm = S.mois[moisCourant], garde = [], j;
+    var avantSupprPassif = solde(moisCourant);
     for(j=0;j<mm.passifs.length;j++){ if(mm.passifs[j].id !== edition) garde.push(mm.passifs[j]); }
-    mm.passifs = garde; sauver(); fermerEtRevenir(); rendre();
+    mm.passifs = garde;
+    propagerDepuis(moisCourant, avantSupprPassif);
+    sauver(); fermerEtRevenir(); rendre();
   });
 }
 
@@ -1252,6 +1289,7 @@ function dessinerReglagesPrincipal(){
 
   document.getElementById('r-ok').addEventListener('click', function(){
     var mm = S.mois[moisCourant], v, j;
+    var avantReglages = mm ? solde(moisCourant) : 0;
     if(mm){
       var rr = document.getElementById('r-retraite');
       if(rr){ v = parseFloat(rr.value.replace(',','.')); if(!isNaN(v)) mm.retraite = v; }
@@ -1260,6 +1298,7 @@ function dessinerReglagesPrincipal(){
         v = parseFloat(rp.value.replace(',','.'));
         if(!isNaN(v)) mm.report = (document.getElementById('tiroir').dataset.rep === 'moins') ? -Math.abs(v) : Math.abs(v);
       }
+      propagerDepuis(moisCourant, avantReglages);
     }
     v = parseFloat(document.getElementById('r-plafond').value.replace(',','.'));
     if(!isNaN(v)) S.reglages.plafond = v;
