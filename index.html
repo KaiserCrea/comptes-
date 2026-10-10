@@ -164,6 +164,12 @@ nav button div{font-size:10px;margin-top:4px;letter-spacing:.6px}
 .cats button{display:flex;align-items:center;gap:9px;padding:10px 11px;border-radius:9px;border:.5px solid transparent;background:var(--carte);color:var(--creme2);font-size:13px;text-align:left;cursor:pointer}
 .cats button.on{border-color:var(--or)}
 .cats button span{line-height:0;flex:none}
+.partligne{position:relative;padding:14px 0 2px;border-top:.5px solid var(--trait)}
+.partligne:first-child{border-top:none;padding-top:0}
+.partligne .retirer{position:absolute;top:10px;right:0;background:none;border:none;color:var(--rouge);line-height:0;padding:6px;cursor:pointer}
+.lienajout{display:block;width:100%;text-align:center;margin:2px 0 14px;font-size:13px;color:var(--or);background:none;border:none;cursor:pointer;padding:8px}
+.totalparts{display:flex;justify-content:space-between;font-size:12px;color:var(--brun);padding:0 2px 14px;border-top:.5px solid var(--trait);padding-top:12px}
+.totalparts b{color:var(--sable);font-family:var(--serif);font-weight:400;font-size:14px}
 .actions{display:flex;gap:10px;margin-top:20px}
 .actions button{flex:1;padding:13px;border-radius:22px;border:.5px solid var(--or-fonce);background:none;color:var(--sable);cursor:pointer}
 .actions button.plein{background:var(--or);border-color:var(--or);color:#2A1408;font-weight:500}
@@ -281,6 +287,7 @@ var JOURCLOTURE = 27;
 
 var S = null, moisCourant = null, onglet = 'mois', tiroirOuvert = false, edition = null;
 var pageMois = 0, dernierMoisAffiche = null;
+var partCounter = 1;
 var LIGNES_PAR_PAGE = 30;
 var anneeVue = 0, quitArme = false;
 
@@ -1058,6 +1065,72 @@ function redessinerPicker(){
   document.getElementById('an+').addEventListener('click', function(){ anneeVue++; redessinerPicker(); });
 }
 
+function htmlPart(idx, retirable){
+  var h = '<div class="partligne" data-part="'+idx+'" data-cat="courses">';
+  if(retirable) h += '<button type="button" class="retirer" data-retirer aria-label="Retirer">'+svg('croix',15)+'</button>';
+  h += '<div class="champ"><label>Montant</label><input type="text" inputmode="decimal" class="montantpart" id="f-montant-'+idx+'" value="" placeholder="0,00"></div>';
+  h += '<div class="champ"><label>Libellé</label><input type="text" class="libpart" id="f-lib-'+idx+'" list="libs" value="" placeholder="Super U, diesel…"></div>';
+  h += '<div class="champ"><label>Catégorie</label><div class="cats">';
+  for(var i=0;i<S.reglages.cats.length;i++){
+    var c = S.reglages.cats[i];
+    h += '<button type="button" data-cat="'+c.id+'" class="'+(c.id==='courses'?'on':'')+'"><span>'+svg(c.ico,18,c.couleur)+'</span>'+c.nom+'</button>';
+  }
+  h += '</div></div></div>';
+  return h;
+}
+function brancherPart(container){
+  if(!container) return;
+  var cb = container.querySelectorAll('[data-cat]'), i;
+  for(i=0;i<cb.length;i++){
+    cb[i].addEventListener('click', function(){
+      var own = this.parentNode.parentNode;
+      var b = own.querySelectorAll('[data-cat]'), j;
+      for(j=0;j<b.length;j++) b[j].classList.remove('on');
+      this.classList.add('on');
+      own.dataset.cat = this.getAttribute('data-cat');
+    });
+  }
+  var retirer = container.querySelector('[data-retirer]');
+  if(retirer) retirer.addEventListener('click', function(){ retirerPart(container); });
+  var mp = container.querySelector('.montantpart');
+  if(mp) mp.addEventListener('input', majTotalParts);
+}
+function ajouterPart(){
+  var parts = document.getElementById('parts');
+  if(parts.querySelectorAll('.partligne').length >= 3) return;
+  var idx = partCounter++;
+  var tmp = document.createElement('div');
+  tmp.innerHTML = htmlPart(idx, true);
+  var nouveau = tmp.firstChild;
+  parts.appendChild(nouveau);
+  brancherPart(nouveau);
+  if(parts.querySelectorAll('.partligne').length >= 3){
+    document.getElementById('ajouter-part').style.display = 'none';
+  }
+  majTotalParts();
+  setTimeout(function(){ var f = document.getElementById('f-montant-'+idx); if(f) f.focus(); }, 50);
+}
+function retirerPart(container){
+  container.parentNode.removeChild(container);
+  var lien = document.getElementById('ajouter-part');
+  if(lien) lien.style.display = '';
+  majTotalParts();
+}
+function majTotalParts(){
+  var wrap = document.getElementById('totalparts');
+  if(!wrap) return;
+  var champs = document.querySelectorAll('#parts .montantpart'), total = 0, i;
+  for(i=0;i<champs.length;i++){
+    var v = parseFloat(champs[i].value.replace(',','.'));
+    if(!isNaN(v)) total += v;
+  }
+  if(champs.length > 1){
+    wrap.style.display = '';
+    document.getElementById('totalpartsval').textContent = eur(total,2);
+  } else {
+    wrap.style.display = 'none';
+  }
+}
 function ouvrirLigne(id){
   var m = S.mois[moisCourant];
   if(!m) return;
@@ -1068,8 +1141,6 @@ function ouvrirLigne(id){
   var auj = new Date(), dft = clefMois(auj)+'-'+String(auj.getDate()).padStart(2,'0');
   var d = x ? x.date : dft;
   var sortie = x ? (x.montant < 0) : true;
-  var montant = x ? Math.abs(x.montant).toFixed(2).replace('.',',') : '';
-  var catId = x ? x.cat : 'courses';
 
   var libs = {}, propositions = '';
   for(i=0;i<m.lignes.length;i++){ libs[m.lignes[i].libelle] = 1; }
@@ -1078,24 +1149,35 @@ function ouvrirLigne(id){
   for(var nom in libs){ if(nom) propositions += '<option value="'+echap(nom)+'">'; }
 
   var h = '<h2>'+(x?'Modifier la ligne':'Nouvelle ligne')+'</h2><div class="filet"></div>';
-  h += '<div class="champ"><label>Montant</label><input type="text" inputmode="decimal" id="f-montant" value="'+montant+'" placeholder="0,00"></div>';
   h += '<div class="champ"><label>Sens</label><div class="sens">'
      + '<button data-sens="sortie" class="'+(sortie?'on':'')+'">Sortie</button>'
      + '<button data-sens="entree" class="'+(sortie?'':'on')+'">Entrée</button></div></div>';
-  h += '<div class="champ"><label>Libellé</label><input type="text" id="f-lib" list="libs" value="'+(x?echap(x.libelle):'')+'" placeholder="Super U, diesel…"><datalist id="libs">'+propositions+'</datalist></div>';
-  h += '<div class="champ"><label>Catégorie</label><div class="cats">';
-  for(i=0;i<S.reglages.cats.length;i++){
-    var c = S.reglages.cats[i];
-    h += '<button data-cat="'+c.id+'" class="'+(c.id===catId?'on':'')+'"><span>'+svg(c.ico,18,c.couleur)+'</span>'+c.nom+'</button>';
+  h += '<datalist id="libs">'+propositions+'</datalist>';
+
+  if(x){
+    var montant = Math.abs(x.montant).toFixed(2).replace('.',',');
+    h += '<div class="champ"><label>Montant</label><input type="text" inputmode="decimal" id="f-montant" value="'+montant+'" placeholder="0,00"></div>';
+    h += '<div class="champ"><label>Libellé</label><input type="text" id="f-lib" list="libs" value="'+echap(x.libelle)+'" placeholder="Super U, diesel…"></div>';
+    h += '<div class="champ"><label>Catégorie</label><div class="cats">';
+    for(i=0;i<S.reglages.cats.length;i++){
+      var c = S.reglages.cats[i];
+      h += '<button data-cat="'+c.id+'" class="'+(c.id===x.cat?'on':'')+'"><span>'+svg(c.ico,18,c.couleur)+'</span>'+c.nom+'</button>';
+    }
+    h += '</div></div>';
+  } else {
+    partCounter = 1;
+    h += '<div id="parts">'+htmlPart(0,false)+'</div>';
+    h += '<button type="button" class="lienajout" id="ajouter-part">+ Ajouter une catégorie</button>';
+    h += '<div class="totalparts" id="totalparts" style="display:none"><span>Total</span><b id="totalpartsval">0,00 €</b></div>';
   }
-  h += '</div></div><div class="champ"><label>Date</label><input type="date" id="f-date" value="'+d+'"></div>';
+
+  h += '<div class="champ"><label>Date</label><input type="date" id="f-date" value="'+d+'"></div>';
   h += '<div class="actions">'+(x?'<button class="danger" id="f-suppr">'+svg('croix',18)+'</button>':'')
      + '<button class="plein" id="f-ok">Enregistrer</button></div>';
   ouvrirTiroir(h);
 
   var t = document.getElementById('tiroir');
   t.dataset.sens = sortie ? 'sortie' : 'entree';
-  t.dataset.cat = catId;
   var sb = t.querySelectorAll('[data-sens]');
   for(i=0;i<sb.length;i++){
     sb[i].addEventListener('click', function(){
@@ -1104,31 +1186,40 @@ function ouvrirLigne(id){
       this.classList.add('on'); t.dataset.sens = this.getAttribute('data-sens');
     });
   }
-  var cb = t.querySelectorAll('[data-cat]');
-  for(i=0;i<cb.length;i++){
-    cb[i].addEventListener('click', function(){
-      var b = t.querySelectorAll('[data-cat]');
-      for(var j=0;j<b.length;j++) b[j].classList.remove('on');
-      this.classList.add('on'); t.dataset.cat = this.getAttribute('data-cat');
-    });
+
+  if(x){
+    t.dataset.cat = x.cat;
+    var cb = t.querySelectorAll('[data-cat]');
+    for(i=0;i<cb.length;i++){
+      cb[i].addEventListener('click', function(){
+        var b = t.querySelectorAll('[data-cat]');
+        for(var j=0;j<b.length;j++) b[j].classList.remove('on');
+        this.classList.add('on'); t.dataset.cat = this.getAttribute('data-cat');
+      });
+    }
+  } else {
+    brancherPart(document.querySelector('#parts .partligne'));
+    document.getElementById('ajouter-part').addEventListener('click', ajouterPart);
   }
+
   document.getElementById('f-ok').addEventListener('click', enregistrerLigne);
   var sup = document.getElementById('f-suppr');
   if(sup) sup.addEventListener('click', supprimerLigne);
-  if(!x) setTimeout(function(){ var f = document.getElementById('f-montant'); if(f) f.focus(); }, 250);
+  if(!x) setTimeout(function(){ var f = document.getElementById('f-montant-0'); if(f) f.focus(); }, 250);
 }
 
 function enregistrerLigne(){
   var t = document.getElementById('tiroir');
-  var brut = document.getElementById('f-montant').value.replace(/\s/g,'').replace(',','.');
-  var v = parseFloat(brut);
-  if(!brut || isNaN(v) || v <= 0){ document.getElementById('f-montant').style.borderColor = 'var(--alerte)'; return; }
-  var montant = t.dataset.sens === 'sortie' ? -Math.abs(v) : Math.abs(v);
-  var lib = document.getElementById('f-lib').value.trim() || cat(t.dataset.cat).nom;
   var date = document.getElementById('f-date').value || (clefMois(new Date())+'-01');
-  var m = S.mois[moisCourant], i;
+  var i;
 
   if(edition){
+    var brut = document.getElementById('f-montant').value.replace(/\s/g,'').replace(',','.');
+    var v = parseFloat(brut);
+    if(!brut || isNaN(v) || v <= 0){ document.getElementById('f-montant').style.borderColor = 'var(--alerte)'; return; }
+    var montant = t.dataset.sens === 'sortie' ? -Math.abs(v) : Math.abs(v);
+    var lib = document.getElementById('f-lib').value.trim() || cat(t.dataset.cat).nom;
+    var m = S.mois[moisCourant];
     var avantEdit = solde(moisCourant);
     for(i=0;i<m.lignes.length;i++){
       if(m.lignes[i].id === edition){
@@ -1137,21 +1228,45 @@ function enregistrerLigne(){
       }
     }
     propagerDepuis(moisCourant, avantEdit);
-  } else {
-    var kd = moisDeDate(date);
-    var cible = S.mois[kd] ? kd : dernierK();
-    var avantAjout = solde(cible);
-    S.mois[cible].lignes.push({id:uid(), date:date, libelle:lib, montant:montant, cat:t.dataset.cat, valide:false, ordre:Date.now()});
-    propagerDepuis(cible, avantAjout);
-    if(cible !== moisCourant){ moisCourant = cible; toast('Ligne rangée dans '+libMois(cible)); }
-    pageMois = 0;
+    sauver(); rendre(); toast('Enregistré');
+    return;
   }
-  sauver(); rendre(); toast('Enregistré');
-  if(!edition){
-    document.getElementById('f-montant').value = '';
-    document.getElementById('f-lib').value = '';
-    setTimeout(function(){ var f = document.getElementById('f-montant'); if(f) f.focus(); }, 60);
+
+  var parts = document.querySelectorAll('#parts .partligne'), valides = [], premier = null;
+  for(i=0;i<parts.length;i++){
+    var pm = parts[i].querySelector('.montantpart');
+    var pv = parseFloat(pm.value.replace(/\s/g,'').replace(',','.'));
+    if(!isNaN(pv) && pv > 0){
+      var plib = parts[i].querySelector('.libpart').value.trim() || cat(parts[i].dataset.cat).nom;
+      valides.push({ montant: t.dataset.sens === 'sortie' ? -Math.abs(pv) : Math.abs(pv), libelle: plib, cat: parts[i].dataset.cat });
+    } else if(premier === null){
+      premier = pm;
+    }
   }
+  if(!valides.length){
+    (premier || document.getElementById('f-montant-0')).style.borderColor = 'var(--alerte)';
+    return;
+  }
+
+  var kd = moisDeDate(date);
+  var cible = S.mois[kd] ? kd : dernierK();
+  var avantAjout = solde(cible);
+  var horodatage = Date.now();
+  for(i=0;i<valides.length;i++){
+    S.mois[cible].lignes.push({id:uid(), date:date, libelle:valides[i].libelle, montant:valides[i].montant, cat:valides[i].cat, valide:false, ordre:horodatage+i});
+  }
+  propagerDepuis(cible, avantAjout);
+  if(cible !== moisCourant){ moisCourant = cible; toast('Ligne rangée dans '+libMois(cible)); }
+  pageMois = 0;
+  sauver(); rendre(); toast(valides.length>1 ? 'Lignes enregistrées' : 'Enregistré');
+
+  partCounter = 1;
+  document.getElementById('parts').innerHTML = htmlPart(0,false);
+  brancherPart(document.querySelector('#parts .partligne'));
+  var lien = document.getElementById('ajouter-part');
+  if(lien) lien.style.display = '';
+  majTotalParts();
+  setTimeout(function(){ var f = document.getElementById('f-montant-0'); if(f) f.focus(); }, 60);
 }
 function supprimerLigne(){
   var m = S.mois[moisCourant], garde = [], i;
