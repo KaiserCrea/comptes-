@@ -167,7 +167,12 @@ nav button div{font-size:10px;margin-top:4px;letter-spacing:.6px}
 .cats button.on{border-color:var(--or)}
 .cats button span{line-height:0;flex:none}
 .partligne{position:relative;padding:14px 0 2px;border-top:.5px solid var(--trait)}
-.partligne:first-child{border-top:none;padding-top:0}
+.cats.mini{gap:6px}
+.cats.mini button{padding:7px 9px;font-size:12px;gap:7px}
+.totalparts.trop b{color:var(--alerte)}
+.corps .detail{display:flex;flex-wrap:wrap;gap:3px 11px;font-size:11px;color:var(--sable);margin-top:4px}
+.corps .detail span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.corps .detail i{width:6px;height:6px;border-radius:50%;flex:none}
 .partligne .retirer{position:absolute;top:10px;right:0;background:none;border:none;color:var(--rouge);line-height:0;padding:6px;cursor:pointer}
 .lienajout{display:block;width:100%;text-align:center;margin:2px 0 14px;font-size:13px;color:var(--or);background:none;border:none;cursor:pointer;padding:8px}
 .totalparts{display:flex;justify-content:space-between;font-size:12px;color:var(--brun);padding:0 2px 14px;border-top:.5px solid var(--trait);padding-top:12px}
@@ -557,7 +562,8 @@ function rendreMois(){
          + '<button class="coche" data-coche="'+x.id+'">'+svg(x.valide?'coche':'case',18)+'</button>'
          + '<span class="ico">'+svg(c.ico,19,c.couleur)+'</span>'
          + '<div class="corps" data-edit="'+x.id+'"><div class="lib">'+echap(x.libelle)+'</div>'
-         + '<div class="meta">'+p[2]+'.'+p[1]+' · '+c.nom.toLowerCase()+'</div></div>'
+         + '<div class="meta">'+p[2]+'.'+p[1]+(x.parts && x.parts.length ? '' : ' · '+c.nom.toLowerCase())+'</div>'
+         + (x.parts && x.parts.length ? htmlDetail(x) : '')+'</div>'
          + '<div class="mont num'+(x.montant>0?' plus':'')+'" data-edit="'+x.id+'">'+signeCourt(x.montant)+'</div>'
          + '</div>';
     }
@@ -629,11 +635,35 @@ function totauxCats(k){
   for(i=0;i<S.reglages.cats.length;i++){ out[S.reglages.cats[i].id] = {sortie:0, entree:0}; }
   if(!m) return out;
   for(i=0;i<m.lignes.length;i++){
-    var x = m.lignes[i];
-    if(!out[x.cat]) out[x.cat] = {sortie:0, entree:0};
-    if(x.montant < 0) out[x.cat].sortie += -x.montant; else out[x.cat].entree += x.montant;
+    var x = m.lignes[i], r = repartition(x), sens = x.montant < 0 ? 'sortie' : 'entree', j;
+    for(j=0;j<r.length;j++){
+      if(!out[r[j].cat]) out[r[j].cat] = {sortie:0, entree:0};
+      out[r[j].cat][sens] += r[j].montant;
+    }
   }
   return out;
+}
+function repartition(x){
+  var out = [{cat:x.cat, montant:Math.abs(Number(x.montant)||0)}], i;
+  if(x.parts){
+    for(i=0;i<x.parts.length;i++){
+      var v = Math.abs(Number(x.parts[i].montant)||0);
+      out.push({cat:x.parts[i].cat, montant:v});
+      out[0].montant -= v;
+    }
+    out[0].montant = Math.round(out[0].montant*100)/100;
+  }
+  return out;
+}
+function htmlDetail(x){
+  var r = repartition(x), h = '<div class="detail">', i;
+  for(i=0;i<r.length;i++){
+    if(i === 0 && r[i].montant <= 0) continue;
+    var c = cat(r[i].cat);
+    h += '<span><i style="background:'+c.couleur+'"></i>'+echap(c.nom)+' '
+       + r[i].montant.toLocaleString('fr-FR',{minimumFractionDigits:2,maximumFractionDigits:2})+'</span>';
+  }
+  return h + '</div>';
 }
 function bilanMois(k){
   var m = S.mois[k];
@@ -1093,71 +1123,87 @@ function redessinerPicker(){
   document.getElementById('an+').addEventListener('click', function(){ anneeVue++; redessinerPicker(); });
 }
 
-function htmlPart(idx, retirable){
-  var h = '<div class="partligne" data-part="'+idx+'" data-cat="courses">';
-  if(retirable) h += '<button type="button" class="retirer" data-retirer aria-label="Retirer">'+svg('croix',15)+'</button>';
-  h += '<div class="champ"><label>Montant</label><input type="text" inputmode="decimal" class="montantpart" id="f-montant-'+idx+'" value="" placeholder="0,00"></div>';
-  h += '<div class="champ"><label>Libellé</label><input type="text" class="libpart" id="f-lib-'+idx+'" list="libs" value="" placeholder="Super U, diesel…"></div>';
-  h += '<div class="champ"><label>Catégorie</label><div class="cats">';
+var MAXPARTS = 2;
+function lireMontant(el){
+  if(!el) return NaN;
+  var v = parseFloat(String(el.value).replace(/\s/g,'').replace(',','.'));
+  return isNaN(v) ? NaN : Math.round(v*100)/100;
+}
+function htmlCats(sel, mini){
+  var h = '<div class="cats'+(mini?' mini':'')+'">';
   for(var i=0;i<S.reglages.cats.length;i++){
     var c = S.reglages.cats[i];
-    h += '<button type="button" data-cat="'+c.id+'" class="'+(c.id==='courses'?'on':'')+'"><span>'+svg(c.ico,18,c.couleur)+'</span>'+c.nom+'</button>';
+    h += '<button type="button" data-cat="'+c.id+'" class="'+(c.id===sel?'on':'')+'"><span>'+svg(c.ico,mini?16:18,c.couleur)+'</span>'+c.nom+'</button>';
   }
-  h += '</div></div></div>';
-  return h;
+  return h + '</div>';
 }
-function brancherPart(container){
-  if(!container) return;
-  var cb = container.querySelectorAll('[data-cat]'), i;
-  for(i=0;i<cb.length;i++){
-    cb[i].addEventListener('click', function(){
-      var own = this.parentNode.parentNode;
-      var b = own.querySelectorAll('[data-cat]'), j;
-      for(j=0;j<b.length;j++) b[j].classList.remove('on');
+function brancherCats(catsDiv, cible){
+  if(!catsDiv) return;
+  var b = catsDiv.querySelectorAll('[data-cat]'), i;
+  for(i=0;i<b.length;i++){
+    b[i].addEventListener('click', function(){
+      for(var j=0;j<b.length;j++) b[j].classList.remove('on');
       this.classList.add('on');
-      own.dataset.cat = this.getAttribute('data-cat');
+      cible.dataset.cat = this.getAttribute('data-cat');
+      majReste();
     });
   }
-  var retirer = container.querySelector('[data-retirer]');
-  if(retirer) retirer.addEventListener('click', function(){ retirerPart(container); });
-  var mp = container.querySelector('.montantpart');
-  if(mp) mp.addEventListener('input', majTotalParts);
 }
-function ajouterPart(){
+function htmlPart(idx, cat0, montant){
+  var h = '<div class="partligne" data-part="'+idx+'" data-cat="'+cat0+'">';
+  h += '<button type="button" class="retirer" data-retirer aria-label="Retirer">'+svg('croix',15)+'</button>';
+  h += '<div class="champ"><label>Dont</label><input type="text" inputmode="decimal" class="montantpart" value="'+(montant ? Number(montant).toFixed(2).replace('.',',') : '')+'" placeholder="0,00"></div>';
+  h += '<div class="champ"><label>Pour</label>'+htmlCats(cat0, true)+'</div></div>';
+  return h;
+}
+function brancherPart(el){
+  brancherCats(el.querySelector('.cats'), el);
+  el.querySelector('[data-retirer]').addEventListener('click', function(){
+    el.parentNode.removeChild(el); majReste();
+  });
+  el.querySelector('.montantpart').addEventListener('input', majReste);
+}
+function ajouterPart(cat0, montant, focus){
   var parts = document.getElementById('parts');
-  if(parts.querySelectorAll('.partligne').length >= 3) return;
-  var idx = partCounter++;
+  if(!parts) return;
+  var deja = parts.querySelectorAll('.partligne');
+  if(deja.length >= MAXPARTS) return;
+  if(!cat0){
+    var pris = {}, i, t = document.getElementById('tiroir');
+    pris[t.dataset.cat] = 1;
+    for(i=0;i<deja.length;i++) pris[deja[i].dataset.cat] = 1;
+    for(i=0;i<S.reglages.cats.length;i++){
+      if(!pris[S.reglages.cats[i].id]){ cat0 = S.reglages.cats[i].id; break; }
+    }
+  }
   var tmp = document.createElement('div');
-  tmp.innerHTML = htmlPart(idx, true);
-  var nouveau = tmp.firstChild;
-  parts.appendChild(nouveau);
-  brancherPart(nouveau);
-  if(parts.querySelectorAll('.partligne').length >= 3){
-    document.getElementById('ajouter-part').style.display = 'none';
-  }
-  majTotalParts();
-  setTimeout(function(){ var f = document.getElementById('f-montant-'+idx); if(f) f.focus(); }, 50);
+  tmp.innerHTML = htmlPart(partCounter++, cat0, montant);
+  var el = tmp.firstChild;
+  parts.appendChild(el);
+  brancherPart(el);
+  majReste();
+  if(focus) setTimeout(function(){ var f = el.querySelector('.montantpart'); if(f) f.focus(); }, 50);
 }
-function retirerPart(container){
-  container.parentNode.removeChild(container);
+function majReste(){
+  var wrap = document.getElementById('reste-part'), t = document.getElementById('tiroir');
+  if(!wrap || !t) return;
+  var parts = document.querySelectorAll('#parts .partligne'), n = parts.length, i;
   var lien = document.getElementById('ajouter-part');
-  if(lien) lien.style.display = '';
-  majTotalParts();
-}
-function majTotalParts(){
-  var wrap = document.getElementById('totalparts');
-  if(!wrap) return;
-  var champs = document.querySelectorAll('#parts .montantpart'), total = 0, i;
-  for(i=0;i<champs.length;i++){
-    var v = parseFloat(champs[i].value.replace(',','.'));
-    if(!isNaN(v)) total += v;
+  if(lien){
+    lien.style.display = n >= MAXPARTS ? 'none' : '';
+    lien.textContent = n ? '+ Une autre catégorie' : '+ Détailler';
   }
-  if(champs.length > 1){
-    wrap.style.display = '';
-    document.getElementById('totalpartsval').textContent = eur(total,2);
-  } else {
-    wrap.style.display = 'none';
+  if(!n){ wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+  var total = lireMontant(document.getElementById('f-montant')), somme = 0;
+  for(i=0;i<n;i++){
+    var v = lireMontant(parts[i].querySelector('.montantpart'));
+    if(!isNaN(v) && v > 0) somme += v;
   }
+  var reste = Math.round(((isNaN(total) ? 0 : total) - somme)*100)/100;
+  document.getElementById('reste-lib').textContent = 'Reste en '+cat(t.dataset.cat).nom;
+  document.getElementById('reste-val').textContent = eur(reste,2);
+  wrap.classList.toggle('trop', reste < 0);
 }
 function ouvrirLigne(id){
   var m = S.mois[moisCourant];
@@ -1169,6 +1215,7 @@ function ouvrirLigne(id){
   var auj = new Date(), dft = clefMois(auj)+'-'+String(auj.getDate()).padStart(2,'0');
   var d = x ? x.date : dft;
   var sortie = x ? (x.montant < 0) : true;
+  var cat0 = x ? x.cat : 'courses';
 
   var libs = {}, propositions = '';
   for(i=0;i<m.lignes.length;i++){ libs[m.lignes[i].libelle] = 1; }
@@ -1181,24 +1228,13 @@ function ouvrirLigne(id){
      + '<button data-sens="sortie" class="'+(sortie?'on':'')+'">Sortie</button>'
      + '<button data-sens="entree" class="'+(sortie?'':'on')+'">Entrée</button></div></div>';
   h += '<datalist id="libs">'+propositions+'</datalist>';
-
-  if(x){
-    var montant = Math.abs(x.montant).toFixed(2).replace('.',',');
-    h += '<div class="champ"><label>Montant</label><input type="text" inputmode="decimal" id="f-montant" value="'+montant+'" placeholder="0,00"></div>';
-    h += '<div class="champ"><label>Libellé</label><input type="text" id="f-lib" list="libs" value="'+echap(x.libelle)+'" placeholder="Super U, diesel…"></div>';
-    h += '<div class="champ"><label>Catégorie</label><div class="cats">';
-    for(i=0;i<S.reglages.cats.length;i++){
-      var c = S.reglages.cats[i];
-      h += '<button data-cat="'+c.id+'" class="'+(c.id===x.cat?'on':'')+'"><span>'+svg(c.ico,18,c.couleur)+'</span>'+c.nom+'</button>';
-    }
-    h += '</div></div>';
-  } else {
-    partCounter = 1;
-    h += '<div id="parts">'+htmlPart(0,false)+'</div>';
-    h += '<button type="button" class="lienajout" id="ajouter-part">+ Ajouter une catégorie</button>';
-    h += '<div class="totalparts" id="totalparts" style="display:none"><span>Total</span><b id="totalpartsval">0,00 €</b></div>';
-  }
-
+  var montant = x ? Math.abs(x.montant).toFixed(2).replace('.',',') : '';
+  h += '<div class="champ"><label>Montant</label><input type="text" inputmode="decimal" id="f-montant" value="'+montant+'" placeholder="0,00"></div>';
+  h += '<div class="champ"><label>Libellé</label><input type="text" id="f-lib" list="libs" value="'+(x?echap(x.libelle):'')+'" placeholder="Super U, diesel…"></div>';
+  h += '<div class="champ" id="f-cats"><label>Catégorie</label>'+htmlCats(cat0, false)+'</div>';
+  h += '<div id="parts"></div>';
+  h += '<div class="totalparts" id="reste-part" style="display:none"><span id="reste-lib">Reste</span><b id="reste-val">0,00 €</b></div>';
+  h += '<button type="button" class="lienajout" id="ajouter-part">+ Détailler</button>';
   h += '<div class="champ"><label>Date</label><input type="date" id="f-date" value="'+d+'"></div>';
   h += '<div class="actions">'+(x?'<button class="danger" id="f-suppr">'+svg('croix',18)+'</button>':'')
      + '<button class="plein" id="f-ok">Enregistrer</button></div>';
@@ -1206,6 +1242,7 @@ function ouvrirLigne(id){
 
   var t = document.getElementById('tiroir');
   t.dataset.sens = sortie ? 'sortie' : 'entree';
+  t.dataset.cat = cat0;
   var sb = t.querySelectorAll('[data-sens]');
   for(i=0;i<sb.length;i++){
     sb[i].addEventListener('click', function(){
@@ -1214,45 +1251,52 @@ function ouvrirLigne(id){
       this.classList.add('on'); t.dataset.sens = this.getAttribute('data-sens');
     });
   }
-
-  if(x){
-    t.dataset.cat = x.cat;
-    var cb = t.querySelectorAll('[data-cat]');
-    for(i=0;i<cb.length;i++){
-      cb[i].addEventListener('click', function(){
-        var b = t.querySelectorAll('[data-cat]');
-        for(var j=0;j<b.length;j++) b[j].classList.remove('on');
-        this.classList.add('on'); t.dataset.cat = this.getAttribute('data-cat');
-      });
-    }
-  } else {
-    brancherPart(document.querySelector('#parts .partligne'));
-    document.getElementById('ajouter-part').addEventListener('click', ajouterPart);
-  }
-
+  brancherCats(document.querySelector('#f-cats .cats'), t);
+  partCounter = 1;
+  if(x && x.parts){ for(i=0;i<x.parts.length;i++) ajouterPart(x.parts[i].cat, x.parts[i].montant, false); }
+  document.getElementById('f-montant').addEventListener('input', majReste);
+  document.getElementById('ajouter-part').addEventListener('click', function(){ ajouterPart(null, null, true); });
   document.getElementById('f-ok').addEventListener('click', enregistrerLigne);
   var sup = document.getElementById('f-suppr');
   if(sup) sup.addEventListener('click', supprimerLigne);
-  if(!x) setTimeout(function(){ var f = document.getElementById('f-montant-0'); if(f) f.focus(); }, 250);
+  majReste();
+  if(!x) setTimeout(function(){ var f = document.getElementById('f-montant'); if(f) f.focus(); }, 250);
 }
 
+function lireParts(principale){
+  var els = document.querySelectorAll('#parts .partligne'), par = {}, ordre = [], i;
+  for(i=0;i<els.length;i++){
+    var v = lireMontant(els[i].querySelector('.montantpart')), c = els[i].dataset.cat;
+    if(isNaN(v) || v <= 0 || c === principale) continue;
+    if(par[c] === undefined){ par[c] = 0; ordre.push(c); }
+    par[c] = Math.round((par[c] + v)*100)/100;
+  }
+  var out = [];
+  for(i=0;i<ordre.length;i++) out.push({cat:ordre[i], montant:par[ordre[i]]});
+  return out;
+}
 function enregistrerLigne(){
   var t = document.getElementById('tiroir');
   var date = document.getElementById('f-date').value || (clefMois(new Date())+'-01');
   var i;
+  var champ = document.getElementById('f-montant');
+  var v = lireMontant(champ);
+  if(isNaN(v) || v <= 0){ champ.style.borderColor = 'var(--alerte)'; return; }
+  var principale = t.dataset.cat;
+  var parts = lireParts(principale), somme = 0;
+  for(i=0;i<parts.length;i++) somme += parts[i].montant;
+  if(somme > v + 0.005){ majReste(); toast('Le détail dépasse le total'); return; }
+  var montant = t.dataset.sens === 'sortie' ? -v : v;
+  var lib = document.getElementById('f-lib').value.trim() || cat(principale).nom;
 
   if(edition){
-    var brut = document.getElementById('f-montant').value.replace(/\s/g,'').replace(',','.');
-    var v = parseFloat(brut);
-    if(!brut || isNaN(v) || v <= 0){ document.getElementById('f-montant').style.borderColor = 'var(--alerte)'; return; }
-    var montant = t.dataset.sens === 'sortie' ? -Math.abs(v) : Math.abs(v);
-    var lib = document.getElementById('f-lib').value.trim() || cat(t.dataset.cat).nom;
     var m = S.mois[moisCourant];
     var avantEdit = solde(moisCourant);
     for(i=0;i<m.lignes.length;i++){
       if(m.lignes[i].id === edition){
-        m.lignes[i].montant = montant; m.lignes[i].libelle = lib;
-        m.lignes[i].cat = t.dataset.cat; m.lignes[i].date = date;
+        var x = m.lignes[i];
+        x.montant = montant; x.libelle = lib; x.cat = principale; x.date = date;
+        if(parts.length) x.parts = parts; else delete x.parts;
       }
     }
     propagerDepuis(moisCourant, avantEdit);
@@ -1260,41 +1304,26 @@ function enregistrerLigne(){
     return;
   }
 
-  var parts = document.querySelectorAll('#parts .partligne'), valides = [], premier = null;
-  for(i=0;i<parts.length;i++){
-    var pm = parts[i].querySelector('.montantpart');
-    var pv = parseFloat(pm.value.replace(/\s/g,'').replace(',','.'));
-    if(!isNaN(pv) && pv > 0){
-      var plib = parts[i].querySelector('.libpart').value.trim() || cat(parts[i].dataset.cat).nom;
-      valides.push({ montant: t.dataset.sens === 'sortie' ? -Math.abs(pv) : Math.abs(pv), libelle: plib, cat: parts[i].dataset.cat });
-    } else if(premier === null){
-      premier = pm;
-    }
-  }
-  if(!valides.length){
-    (premier || document.getElementById('f-montant-0')).style.borderColor = 'var(--alerte)';
-    return;
-  }
-
   var kd = moisDeDate(date);
   var cible = S.mois[kd] ? kd : dernierK();
   var avantAjout = solde(cible);
-  var horodatage = Date.now();
-  for(i=0;i<valides.length;i++){
-    S.mois[cible].lignes.push({id:uid(), date:date, libelle:valides[i].libelle, montant:valides[i].montant, cat:valides[i].cat, valide:false, ordre:horodatage+i});
-  }
+  var nl = {id:uid(), date:date, libelle:lib, montant:montant, cat:principale, valide:false, ordre:Date.now()};
+  if(parts.length) nl.parts = parts;
+  S.mois[cible].lignes.push(nl);
   propagerDepuis(cible, avantAjout);
   if(cible !== moisCourant){ moisCourant = cible; toast('Ligne rangée dans '+libMois(cible)); }
   pageMois = 0;
-  sauver(); rendre(); toast(valides.length>1 ? 'Lignes enregistrées' : 'Enregistré');
+  sauver(); rendre(); toast('Enregistré');
 
+  champ.value = ''; champ.style.borderColor = '';
+  document.getElementById('f-lib').value = '';
+  document.getElementById('parts').innerHTML = '';
   partCounter = 1;
-  document.getElementById('parts').innerHTML = htmlPart(0,false);
-  brancherPart(document.querySelector('#parts .partligne'));
-  var lien = document.getElementById('ajouter-part');
-  if(lien) lien.style.display = '';
-  majTotalParts();
-  setTimeout(function(){ var f = document.getElementById('f-montant-0'); if(f) f.focus(); }, 60);
+  t.dataset.cat = 'courses';
+  var cb = document.querySelectorAll('#f-cats [data-cat]');
+  for(i=0;i<cb.length;i++) cb[i].classList.toggle('on', cb[i].getAttribute('data-cat') === 'courses');
+  majReste();
+  setTimeout(function(){ var f = document.getElementById('f-montant'); if(f) f.focus(); }, 60);
 }
 function supprimerLigne(){
   var m = S.mois[moisCourant], garde = [], i;
