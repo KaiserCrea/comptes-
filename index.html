@@ -272,7 +272,7 @@ var CATS_DEF = [
   {id:'perso',    nom:'Pour moi',    ico:'etoile', couleur:'#F4C0D1', barre:'#ED93B1', groupe:'courant', seuil:175},
   {id:'gourmand', nom:'Gourmandise', ico:'pain',   couleur:'#FAC775', barre:'#EF9F27', groupe:'courant', seuil:50},
   {id:'domaine',  nom:'Le domaine',  ico:'maison', couleur:'#9FE1CB', barre:'#5DCAA5', groupe:'autre', seuilMin:-200, seuilMax:500},
-  {id:'livres',   nom:'Les livres',  ico:'livre',  couleur:'#CECBF6', barre:'#AFA9EC', groupe:'autre', seuil:620},
+  {id:'livres',   nom:'Les livres',  ico:'livre',  couleur:'#CECBF6', barre:'#AFA9EC', groupe:'autre', seuilMin:-200, seuilMax:620},
   {id:'reste',    nom:'Le reste',    ico:'points', couleur:'#F5C4B3', barre:'#F0997B', groupe:'autre'}
 ];
 var PASSIFS_DEF = [
@@ -690,7 +690,7 @@ function htmlReste(b){
        + '<span style="color:var(--or-sombre)">·</span>'
        + '<span style="color:var(--vert)">'+(b.t[c.id].entree?'+':'')+eur(b.t[c.id].entree,0)+'</span></b>';
     h += '<div class="barre"><div class="t"><span>'+svg(c.ico,16,c.couleur)+c.nom+'</span>'+montants+'</div>';
-    if(c.id === 'domaine'){
+    if(c.seuilMin !== undefined && c.seuilMax !== undefined){
       h += barreBipolaire(net, c.seuilMin, c.seuilMax, c.barre);
     } else if(c.seuil){
       h += barreSeuil(Math.max(0,net), c.seuil, c.barre, true);
@@ -1445,7 +1445,7 @@ function dessinerReglagesCategories(){
     h += '<div class="champ" style="margin-bottom:16px">'
        + '<div style="display:flex;align-items:center;gap:9px;margin-bottom:8px">'
        + svg(c.ico,19,c.couleur) + '<input type="text" data-catnom="'+c.id+'" value="'+echap(c.nom)+'" style="flex:1"></div>';
-    if(c.id === 'domaine'){
+    if(c.seuilMin !== undefined && c.seuilMax !== undefined){
       h += '<div style="display:flex;gap:9px">'
          + '<div style="flex:1"><label style="display:block;font-size:10px;color:var(--brun);margin-bottom:4px">limite découvert</label>'
          + '<input type="text" inputmode="decimal" data-seuilmin="'+c.id+'" value="'+Math.abs(c.seuilMin||0)+'"></div>'
