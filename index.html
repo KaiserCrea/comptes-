@@ -126,6 +126,7 @@ section.on{display:block}
 .ecart .v{font-family:var(--serif);font-size:20px}
 .ecart .p{font-size:11px;color:#B49872;letter-spacing:.3px;margin-top:2px}
 .barre{margin-bottom:13px}
+.detsous{font-size:11px;color:var(--brun);text-align:right;margin-top:6px;letter-spacing:.2px}
 .barre .t{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
 .barre .t span{font-size:13px;color:var(--creme2);display:flex;align-items:center;gap:7px}
 .barre .t b{font-family:var(--serif);font-weight:400;font-size:15px;color:var(--creme);display:flex;align-items:center;gap:4px}
@@ -759,16 +760,17 @@ function htmlReste(b){
     c = cats[i];
     if(c.groupe !== 'autre') continue;
     var net = b.t[c.id].entree - b.t[c.id].sortie;
-    var montants = '<b><span style="color:var(--brun)">'+eur(-b.t[c.id].sortie,0)+'</span>'
-       + '<span style="color:var(--or-sombre)">·</span>'
-       + '<span style="color:var(--vert)">'+(b.t[c.id].entree?'+':'')+eur(b.t[c.id].entree,0)+'</span></b>';
     var sansBarre = !((c.seuilMin !== undefined && c.seuilMax !== undefined) || c.seuil);
+    var montants = sansBarre
+      ? '<b>'+eur(b.t[c.id].sortie - b.t[c.id].entree,0)+'</b>'
+      : '<b style="color:'+(net<0?'var(--rouge)':(net>0?'var(--vert)':'var(--creme)'))+'">'+(net>0?'+':'')+eur(net,0)+'</b>';
     h += '<div class="barre'+(sansBarre ? ' sansbarre' : '')+'"><div class="t"><span>'+svg(c.ico,16,c.couleur)+c.nom+'</span>'+montants+'</div>';
     if(c.seuilMin !== undefined && c.seuilMax !== undefined){
       h += barreBipolaire(net, c.seuilMin, c.seuilMax, c.barre);
     } else if(c.seuil){
       h += barreSeuil(Math.max(0,net), c.seuil, c.barre, true);
     }
+    if(!sansBarre) h += '<div class="detsous">sorties '+eur(b.t[c.id].sortie,0)+' · entrées '+eur(b.t[c.id].entree,0)+'</div>';
     h += '</div>';
   }
   return h + '</div>';
