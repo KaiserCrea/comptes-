@@ -45,6 +45,10 @@ header{padding:20px 16px 0;flex:none}
 .jauge{height:2px;background:var(--carte2);border-radius:1px;margin:16px 6px 8px;overflow:hidden}
 .jauge i{display:block;height:100%;background:var(--or);border-radius:1px;transition:width .3s,background .3s}
 .jaugetxt{display:flex;justify-content:space-between;font-size:11px;color:var(--brun);letter-spacing:.4px;margin:0 6px 8px}
+.finmois{font-size:11px;color:var(--brun);letter-spacing:.4px;margin:-2px 6px 6px;text-align:center}
+.finmois:empty{display:none}
+.finmois b{font-weight:400;color:var(--or)}
+.finmois b.proche{color:var(--rouge)}
 .badgeclos{font-size:11px;color:var(--or);letter-spacing:.8px;margin-top:4px}
 
 main{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:8px 16px 100px}
@@ -224,6 +228,7 @@ nav button div{font-size:10px;margin-top:4px;letter-spacing:.6px}
     <div class="solde num" id="soldeval">—</div>
     <div class="jauge"><i id="jaugebar" style="width:0%"></i></div>
     <div class="jaugetxt"><span id="jaugeg">—</span><span id="jauged">—</span></div>
+    <div class="finmois" id="finmois"></div>
     <div class="badgeclos" id="badgeclos"></div>
   </div>
 
@@ -530,6 +535,16 @@ function rendreEntete(){
   document.getElementById('jaugeg').textContent = 'découvert '+eur(plaf,0);
   document.getElementById('jauged').textContent = !m ? '' : (dette >= plaf ? eur(dette-plaf,0)+' au-delà' : eur(plaf-dette,0)+' restants');
   document.getElementById('badgeclos').textContent = (m && m.clos) ? 'mois clôturé' : '';
+  var fm = document.getElementById('finmois'), txt = '';
+  if(m && !m.clos && moisCourant === moisComptable(new Date())){
+    var auj = new Date(), aujNum = Math.round(Date.UTC(auj.getFullYear(), auj.getMonth(), auj.getDate()) / 86400000);
+    var fin = finMoisNum(moisCourant), reste = fin + 1 - aujNum;
+    var q = isoDeNum(fin).split('-');
+    var quand = reste <= 1 ? 'demain' : 'dans '+reste+' jours';
+    txt = 'fin du mois le '+parseInt(q[2],10)+' '+MOISCOURT[parseInt(q[1],10)-1]
+        + ' · retraite <b'+(reste <= 2 ? ' class="proche"' : '')+'>'+quand+'</b>';
+  }
+  fm.innerHTML = txt;
 }
 
 function htmlNotes(){
