@@ -309,11 +309,19 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 function clefMois(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
 function libMois(k){ var p=k.split('-'); return MOISNOM[parseInt(p[1],10)-1]+' '+p[0]; }
 function moisDecale(k,n){ var p=k.split('-'); return clefMois(new Date(parseInt(p[0],10), parseInt(p[1],10)-1+n, 1)); }
+var VERSEMENTS_DEF = {'2026-09':'2026-09-29','2026-10':'2026-10-29','2026-11':'2026-11-27','2026-12':'2026-12-23'};
+function jourVersement(x){
+  var v = S && S.reglages && S.reglages.versements ? S.reglages.versements[x] : null;
+  if(v && v.slice(0,7) === x) return parseInt(v.split('-')[2],10);
+  return JOURCLOTURE + 1;
+}
 function moisComptable(d){
-  var mo = d.getMonth();
-  if(d.getDate() > JOURCLOTURE) mo += 1;
+  var x = clefMois(d), mo = d.getMonth();
+  if(d.getDate() >= jourVersement(x)) mo += 1;
   return clefMois(new Date(d.getFullYear(), mo, 1));
 }
+function debutMoisNum(k){ var x = moisDecale(k,-1), q = x.split('-'); return Math.round(Date.UTC(+q[0], +q[1]-1, jourVersement(x)) / 86400000); }
+function finMoisNum(k){ var q = k.split('-'); return Math.round(Date.UTC(+q[0], +q[1]-1, jourVersement(k)) / 86400000) - 1; }
 function moisDeDate(str){
   var p = str.split('-');
   return moisComptable(new Date(parseInt(p[0],10), parseInt(p[1],10)-1, parseInt(p[2],10)));
@@ -352,6 +360,7 @@ function normaliser(){
   if(!S.reglages.cats || S.reglages.cats.length !== CATS_DEF.length) S.reglages.cats = CATS_DEF;
   fusionnerSeuils();
   if(S.reglages.dette === undefined) S.reglages.dette = 0;
+  if(!S.reglages.versements) S.reglages.versements = JSON.parse(JSON.stringify(VERSEMENTS_DEF));
   if(!S.notes) S.notes = [];
   if(S.repli === undefined) S.repli = true;
   if(!S.mois) S.mois = {};
@@ -452,9 +461,7 @@ function jourNum(iso){ var q = iso.split('-'); return Math.round(Date.UTC(+q[0],
 function isoDeNum(n){ var d = new Date(n*86400000); return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0'); }
 function dates4s(p, k){
   if(!p.semaines || !p.ref) return [];
-  var q = k.split('-'), y = +q[0], mo = +q[1]-1;
-  var debut = Math.round(Date.UTC(y, mo-1, JOURCLOTURE+1) / 86400000);
-  var fin = Math.round(Date.UTC(y, mo, JOURCLOTURE) / 86400000);
+  var debut = debutMoisNum(k), fin = finMoisNum(k);
   var pas = 7 * Number(p.semaines), r = jourNum(p.ref), out = [];
   var n = Math.ceil((debut - r) / pas), d = r + n*pas;
   for(; d <= fin; d += pas){ if(d >= debut) out.push(isoDeNum(d)); }
@@ -978,14 +985,24 @@ function jourPassif(p, k){
   if(p.semaines){ var d = dates4s(p, k || moisCourant); return d.length ? +d[0].split('-')[2] : 0; }
   return (Number(p.tous)||1) > 1 ? 0 : (Number(p.jour)||0);
 }
-function rangDuJour(j){ if(!j) return 99; return j > JOURCLOTURE ? j - 31 : j; }
-function rangJour(p, k){ return rangDuJour(jourPassif(p, k)); }
+function dateJourDansMois(j, k){
+  var x = moisDecale(k,-1);
+  if(j < jourVersement(x)) x = k;
+  var q = x.split('-'), dern = new Date(+q[0], +q[1], 0).getDate();
+  return isoDeNum(Math.round(Date.UTC(+q[0], +q[1]-1, Math.min(j, dern)) / 86400000));
+}
+function rangDate(iso, k){ return jourNum(iso) - debutMoisNum(k); }
+function rangJour(p, k){
+  if(p.semaines){ var d = dates4s(p, k); return d.length ? rangDate(d[0], k) : 9999; }
+  var j = jourPassif(p, k);
+  return j ? rangDate(dateJourDansMois(j, k), k) : 9999;
+}
 function trierPassifs(m, k){ m.passifs.sort(function(a,b){ return rangJour(a, k) - rangJour(b, k); }); }
 function nbPassifsDates(m, k){ var n = 0, i; for(i=0;i<m.passifs.length;i++){ if(jourPassif(m.passifs[i], k)) n++; } return n; }
-function htmlPastilleJour(j, k){
-  if(!j) return '<span class="pastj creux"></span>';
-  var km = moisDecale(k, j > JOURCLOTURE ? -1 : 0);
-  return '<span class="pastj"><b>'+j+'</b><i>'+MOISCOURT[parseInt(km.split('-')[1],10)-1]+'</i></span>';
+function htmlPastilleDate(iso){
+  if(!iso) return '<span class="pastj creux"></span>';
+  var q = iso.split('-');
+  return '<span class="pastj"><b>'+parseInt(q[2],10)+'</b><i>'+MOISCOURT[parseInt(q[1],10)-1]+'</i></span>';
 }
 function occurrencesPassifs(m, k){
   var out = [], i, j;
@@ -994,12 +1011,11 @@ function occurrencesPassifs(m, k){
     if(p.semaines){
       var ds = dates4s(p, k), faits = p.faits || [];
       for(j=0;j<ds.length;j++){
-        var jj = +ds[j].split('-')[2];
-        out.push({p:p, idx:i, du:true, jour:jj, occ:ds[j], passe:faits.indexOf(ds[j]) >= 0, rang:rangDuJour(jj)});
+        out.push({p:p, idx:i, du:true, jour:+ds[j].split('-')[2], date:ds[j], occ:ds[j], passe:faits.indexOf(ds[j]) >= 0, rang:rangDate(ds[j], k)});
       }
     } else {
-      var jr = jourPassif(p, k);
-      out.push({p:p, idx:i, du:passifDu(p, k), jour:jr, occ:'', passe:!!p.passe, rang:rangDuJour(jr)});
+      var jr = jourPassif(p, k), dj = jr ? dateJourDansMois(jr, k) : '';
+      out.push({p:p, idx:i, du:passifDu(p, k), jour:jr, date:dj, occ:'', passe:!!p.passe, rang:dj ? rangDate(dj, k) : 9999});
     }
   }
   out.sort(function(a,b){ return a.rang - b.rang; });
@@ -1034,7 +1050,7 @@ function rendrePassifs(){
     h += '<div class="ligne'+(date ? '' : ' pdrag')+(o.passe && du ? ' valide' : '')+(du ? '' : ' horsmois')+'" data-idx="'+o.idx+'">'
        + (du ? '<button class="coche" data-passif="'+p.id+'"'+(o.occ ? ' data-occ="'+o.occ+'"' : '')+'>'+svg(o.passe?'coche':'case',18)+'</button>'
              : '<span class="coche" style="width:18px;height:18px;display:inline-block"></span>')
-       + (avecDates ? htmlPastilleJour(o.jour, moisCourant) : '')
+       + (avecDates ? htmlPastilleDate(o.date) : '')
        + '<div class="corps" data-passifedit="'+p.id+'"><div class="lib">'+echap(p.nom)+'</div>'+meta+'</div>'
        + '<div class="mont num" data-passifedit="'+p.id+'">'+eur(Number(p.montant)||0,0)+'</div>'
        + (date ? '' : '<span class="poignee">'+svg('liste',17)+'</span>')+'</div>';
@@ -1577,9 +1593,11 @@ function dessinerReglagesPrincipal(){
   h += '<div class="reg"><span>Dette (hors calculs)</span><input type="text" inputmode="decimal" id="r-dette" value="'+(Number(S.reglages.dette)||0)+'"></div>';
   h += '<div class="rang" id="r-cats" style="margin-top:16px;background:var(--carte);border-radius:10px;padding:12px 15px;cursor:pointer"><span>Catégories</span>'
      + '<span style="line-height:0;color:var(--or-sombre)">'+svg('droite',16)+'</span></div>';
+  h += '<div class="rang" id="r-vers" style="margin-top:10px;background:var(--carte);border-radius:10px;padding:12px 15px;cursor:pointer"><span>Versements de la retraite</span>'
+     + '<span style="line-height:0;color:var(--or-sombre)">'+svg('droite',16)+'</span></div>';
   h += '<div class="actions"><button id="r-export">Exporter</button><button id="r-import">Importer</button></div>';
   h += '<div class="actions"><button class="plein" id="r-ok">Enregistrer</button></div>';
-  h += '<div class="note2">Le report se corrige tant que le mois n\'est pas clôturé. Le mois comptable se clôture le '+JOURCLOTURE+'. Après cette date, les saisies vont sur le mois suivant. La dette n\'entre dans aucun calcul, elle est juste gardée en mémoire. L\'export enregistre une sauvegarde de tous tes mois.</div>';
+  h += '<div class="note2">Le report se corrige tant que le mois n\'est pas clôturé. Le nouveau mois commence le jour du versement de ta retraite (voir Versements de la retraite). Sans date saisie, il commence le '+(JOURCLOTURE+1)+'. La dette n\'entre dans aucun calcul, elle est juste gardée en mémoire. L\'export enregistre une sauvegarde de tous tes mois.</div>';
   document.getElementById('tiroir').innerHTML = h;
 
   document.getElementById('r-ok').addEventListener('click', function(){
@@ -1604,6 +1622,7 @@ function dessinerReglagesPrincipal(){
   document.getElementById('r-export').addEventListener('click', exporter);
   document.getElementById('r-import').addEventListener('click', importer);
   document.getElementById('r-cats').addEventListener('click', dessinerReglagesCategories);
+  document.getElementById('r-vers').addEventListener('click', dessinerReglagesVersements);
   var tr = document.getElementById('tiroir');
   tr.dataset.rep = (m && (Number(m.report)||0) < 0) ? 'moins' : 'plus';
   var rb = tr.querySelectorAll('[data-rep]');
@@ -1614,6 +1633,37 @@ function dessinerReglagesPrincipal(){
       this.classList.add('on'); tr.dataset.rep = this.getAttribute('data-rep');
     });
   }
+}
+function dessinerReglagesVersements(){
+  var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">'
+    + '<button id="rv-retour" style="background:none;border:none;color:var(--or);line-height:0;padding:4px;cursor:pointer">'+svg('gauche',20)+'</button>'
+    + '<h2 style="flex:1;margin:0">Versements</h2></div><div class="filet"></div>';
+  h += '<div class="note2" style="margin-top:0">Le jour où ta retraite arrive, un nouveau mois commence. Sans date, le mois change le '+(JOURCLOTURE+1)+'.</div>';
+  var depart = moisDecale(moisComptable(new Date()), -2), i;
+  for(i=0;i<14;i++){
+    var x = moisDecale(depart, i), v = S.reglages.versements[x] || '';
+    var q = x.split('-'), dern = new Date(+q[0], +q[1], 0).getDate();
+    h += '<div class="reg"><span>'+libMois(x)+'<br><em style="font-style:normal;font-size:11px;color:var(--brun)">ouvre '+libMois(moisDecale(x,1)).split(' ')[0]+'</em></span>'
+       + '<input type="date" data-vers="'+x+'" value="'+v+'" min="'+x+'-01" max="'+x+'-'+dern+'" style="width:auto"></div>';
+  }
+  h += '<div class="actions"><button class="plein" id="rv-ok">Enregistrer</button></div>';
+  document.getElementById('tiroir').innerHTML = h;
+  document.getElementById('rv-retour').addEventListener('click', dessinerReglagesPrincipal);
+  document.getElementById('rv-ok').addEventListener('click', function(){
+    var ch = document.querySelectorAll('[data-vers]'), j, bon = true;
+    for(j=0;j<ch.length;j++){
+      var x = ch[j].getAttribute('data-vers'), v = ch[j].value;
+      ch[j].style.borderColor = '';
+      if(v && v.slice(0,7) !== x){ ch[j].style.borderColor = 'var(--alerte)'; bon = false; }
+    }
+    if(!bon){ toast('La date doit tomber dans son mois'); return; }
+    for(j=0;j<ch.length;j++){
+      var x2 = ch[j].getAttribute('data-vers'), v2 = ch[j].value;
+      if(v2) S.reglages.versements[x2] = v2; else delete S.reglages.versements[x2];
+    }
+    sauver(); rattraper(); rendre(); toast('Enregistré');
+    dessinerReglagesPrincipal();
+  });
 }
 function dessinerReglagesCategories(){
   var h = '<div style="display:flex;align-items:center;gap:10px;margin-bottom:2px">'
